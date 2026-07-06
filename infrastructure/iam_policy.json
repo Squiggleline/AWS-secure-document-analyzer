@@ -4,16 +4,6 @@
         {
             "Effect": "Allow",
             "Action": [
-                "comprehend:DetectDominantLanguage",
-                "comprehend:DetectSentiment",
-                "comprehend:DetectEntities",
-                "comprehend:DetectKeyPhrases"
-            ],
-            "Resource": "*"
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
                 "textract:DetectDocumentText",
                 "textract:AnalyzeDocument"
             ],
@@ -23,9 +13,19 @@
             "Effect": "Allow",
             "Action": [
                 "s3:GetObject",
+                "s3:ListBucket",
                 "s3:PutObject"
             ],
-            "Resource": "arn:aws:s3:::your-bucket-name/*"
+            "Resource": "arn:aws:s3:::ai-security-uploads-2026/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "kms:Decrypt",
+                "kms:Encrypt",
+                "kms:GenerateDataKey"
+            ],
+            "Resource": "*"
         }
     ]
 }
