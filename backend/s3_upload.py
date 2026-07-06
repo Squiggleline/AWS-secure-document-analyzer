@@ -46,14 +46,14 @@ def upload_document(file_path, bucket_name, object_name=None, kms_key_id=None):
             object_name,         # Name in S3
             ExtraArgs=extra_args if extra_args else None
         )
-        print(f"✓ Successfully uploaded {file_path} to s3://{bucket_name}/{object_name}")
+        print(f"[OK] Successfully uploaded {file_path} to s3://{bucket_name}/{object_name}")
         return True
         
     except ClientError as e:
-        print(f"✗ Error uploading file: {e}")
+        print(f"[ERROR] Error uploading file: {e}")
         return False
     except FileNotFoundError:
-        print(f"✗ File not found: {file_path}")
+        print(f"[ERROR] File not found: {file_path}")
         return False
 
 # This code runs when you execute the script directly

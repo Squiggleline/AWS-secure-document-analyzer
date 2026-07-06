@@ -1,0 +1,3 @@
+Amazon Web Services is a cloud computing platform based in Seattle, Washington.
+It provides a wide range of services including computing power, storage, and databases.
+AWS is used by millions of customers worldwide for building scalable applications.

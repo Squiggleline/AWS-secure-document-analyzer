@@ -36,11 +36,11 @@ def extract_text_from_document(bucket_name, document_name, feature_types=['TABLE
             FeatureTypes=feature_types
         )
         
-        print(f"✓ Successfully extracted text from s3://{bucket_name}/{document_name}")
+        print(f"[OK] Successfully extracted text from s3://{bucket_name}/{document_name}")
         return response
         
     except ClientError as e:
-        print(f"✗ Error extracting text: {e}")
+        print(f"[ERROR] Error extracting text: {e}")
         return None
 
 def extract_text_simple(bucket_name, document_name):
@@ -72,11 +72,11 @@ def extract_text_simple(bucket_name, document_name):
             if block['BlockType'] == 'LINE':
                 extracted_text += block['Text'] + "\n"
         
-        print(f"✓ Successfully extracted text from s3://{bucket_name}/{document_name}")
+        print(f"[OK] Successfully extracted text from s3://{bucket_name}/{document_name}")
         return extracted_text
         
     except ClientError as e:
-        print(f"✗ Error extracting text: {e}")
+        print(f"[ERROR] Error extracting text: {e}")
         return None
 
 # This code runs when you execute the script directly
