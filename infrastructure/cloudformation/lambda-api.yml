@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure Document Analyzer - Lambda and API Gateway for document processing'
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: 'ai-security-uploads-2026'
+    Description: 'Name of the S3 bucket for document storage'
+
+Resources:
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaS3TextractPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource: !Sub 'arn:aws:s3:::${BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - 'textract:DetectDocumentText'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: 'arn:aws:logs:*:*:*'
+
+  # Lambda Function
+  DocumentAnalyzerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: 'secure-document-analyzer'
+      Handler: 'lambda_function.lambda_handler'
+      Runtime: python3.12
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          # This is a placeholder - you'll need to upload the actual code
+          # as a .zip file or use AWS SAM/Serverless framework
+          import json
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': json.dumps({'message': 'Deploy the actual lambda_function.py code'})}
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref BucketName
+      Timeout: 30
+      MemorySize: 256
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: 'SecureDocumentAnalyzerAPI'
+      Description: 'API for uploading documents to the analyzer'
+
+  # API Resource
+  DocumentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'document'
+
+  # API Method
+  DocumentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref DocumentResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DocumentAnalyzerFunction.Arn}/invocations'
+        PassthroughBehavior: WHEN_NO_MATCH
+
+  # API Deployment
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: DocumentMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+
+  # API Stage
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: 'prod'
+      RestApiId: !Ref ApiGateway
+      DeploymentId: !Ref ApiDeployment
+
+  # Lambda Permission for API Gateway
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DocumentAnalyzerFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*/POST/document'
+
+Outputs:
+  ApiUrl:
+    Description: 'URL of the API Gateway endpoint'
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod/document'
+  LambdaArn:
+    Description: 'ARN of the Lambda function'
+    Value: !GetAtt DocumentAnalyzerFunction.Arn
