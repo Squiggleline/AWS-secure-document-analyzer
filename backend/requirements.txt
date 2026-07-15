@@ -1,0 +1,2 @@
+# AWS SDK for Python
+boto3>=1.43.39
