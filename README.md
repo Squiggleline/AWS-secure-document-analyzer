@@ -52,7 +52,6 @@ secure-document-analyzer/
 1. AWS CLI installed and configured (`aws configure`)
 2. AWS SAM CLI installed (`sam --version`)
 3. Python 3.12+
-4. An S3 bucket with KMS encryption enabled
 
 ## Quick Start
 
@@ -74,6 +73,14 @@ Answer the prompts:
 - Confirm changes before deploy: `Y`
 - Allow SAM to create IAM roles: `Y`
 - Save arguments to samconfig.toml: `Y`
+
+#### Deployment Parameters
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `CreateBucket` | Create new S3 bucket (true) or use existing (false) | `false` |
+| `DocumentBucketName` | S3 bucket name for document storage | `ai-security-uploads-2026` |
+| `KmsKeyId` | KMS key ID for encryption (optional) | (empty) |
 
 ### 3. Test the API
 
