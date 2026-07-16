@@ -7,6 +7,7 @@ Description: |
   # - Lambda function for document processing
   # - API Gateway for REST endpoints
   # - IAM roles with least-privilege permissions
+  # - Optional: S3 bucket with KMS encryption
   #
   # Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return text
 
@@ -17,13 +18,57 @@ Globals:
     Runtime: python3.12
 
 Parameters:
-  # S3 bucket for document storage (KMS encrypted)
+  # ============================================================================
+  # S3 Bucket Configuration
+  # ============================================================================
+  # Option 1: Use an existing bucket (set CreateBucket=false)
+  # Option 2: Create a new bucket with KMS encryption (set CreateBucket=true)
+  CreateBucket:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Whether to create a new S3 bucket or use an existing one'
+  
   DocumentBucketName:
     Type: String
     Default: 'ai-security-uploads-2026'
     Description: 'Name of the S3 bucket for document storage'
+  
+  KmsKeyId:
+    Type: String
+    Default: ''
+    Description: 'Optional KMS key ID for bucket encryption (leave empty for default)'
+
+Conditions:
+  # Condition to check if we should create a new bucket
+  ShouldCreateBucket: !Equals [!Ref CreateBucket, 'true']
 
 Resources:
+  # ============================================================================
+  # S3 Bucket (Optional - for new deployments)
+  # ============================================================================
+  # Creates a new S3 bucket with KMS encryption if CreateBucket=true
+  # If using an existing bucket, this resource is skipped
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateBucket
+    Properties:
+      BucketName: !Ref DocumentBucketName
+      # Enable server-side encryption with KMS
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !If [!Equals [!Ref KmsKeyId, ''], !Ref AWS::NoValue, !Ref KmsKeyId]
+      # Block public access for security
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
   # ============================================================================
   # Lambda Function - Document Processing
   # ============================================================================
@@ -108,4 +153,4 @@ Outputs:
   
   DocumentBucket:
     Description: 'S3 bucket for document storage'
-    Value: !Ref DocumentBucketName
+    Value: !If [ShouldCreateBucket, !Ref DocumentBucketName, !Ref DocumentBucketName]
