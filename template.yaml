@@ -40,6 +40,16 @@ Parameters:
     Type: String
     Default: ''
     Description: 'Optional KMS key ID for bucket encryption (leave empty for default)'
+  
+  LogLevel:
+    Type: String
+    Default: 'INFO'
+    AllowedValues:
+      - 'DEBUG'
+      - 'INFO'
+      - 'WARNING'
+      - 'ERROR'
+    Description: 'Log level for Lambda function'
 
 Conditions:
   # Condition to check if we should create a new bucket
@@ -85,9 +95,11 @@ Resources:
       FunctionName: 'secure-document-analyzer'
       
       # Environment variables for configuration
+      # All configuration is externalized for flexibility
       Environment:
         Variables:
           BUCKET_NAME: !Ref DocumentBucketName
+          LOG_LEVEL: !Ref LogLevel
       
       # Least-privilege IAM policies
       # Each policy grants only the minimum required permissions
