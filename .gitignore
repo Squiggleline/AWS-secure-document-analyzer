@@ -32,6 +32,11 @@ backend/test_document.*
 backend/test_mvp.py
 backend/create_test_pdf.py
 
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Virtual environment
 venv/
 ENV/
