@@ -73,6 +73,29 @@ Resources:
     Properties:
       Name: 'SecureDocumentAnalyzerAPI'
       Description: 'API for uploading documents to the analyzer'
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # API Gateway Account for CORS
+  ApiGatewayAccount:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !GetAtt 'ApiGatewayCloudWatchRole.Arn'
+
+  # IAM Role for API Gateway CloudWatch
+  ApiGatewayCloudWatchRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs'
 
   # API Resource
   DocumentResource:
@@ -95,13 +118,47 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DocumentAnalyzerFunction.Arn}/invocations'
         PassthroughBehavior: WHEN_NO_MATCH
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            'method.response.header.Access-Control-Allow-Origin': true
+            'method.response.header.Access-Control-Allow-Headers': true
+            'method.response.header.Access-Control-Allow-Methods': true
+
+  # OPTIONS Method for CORS
+  DocumentOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref DocumentResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              'method.response.header.Access-Control-Allow-Origin': "'*'"
+              'method.response.header.Access-Control-Allow-Headers': "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              'method.response.header.Access-Control-Allow-Methods': "'POST,OPTIONS'"
+        RequestTemplates:
+          - "'statusCode': 200"
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            'method.response.header.Access-Control-Allow-Origin': true
+            'method.response.header.Access-Control-Allow-Headers': true
+            'method.response.header.Access-Control-Allow-Methods': true
 
   # API Deployment
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
-    DependsOn: DocumentMethod
+    DependsOn:
+      - DocumentMethod
+      - DocumentOptionsMethod
     Properties:
       RestApiId: !Ref ApiGateway
+      Description: 'API deployment for document analyzer'
 
   # API Stage
   ApiStage:
@@ -110,6 +167,11 @@ Resources:
       StageName: 'prod'
       RestApiId: !Ref ApiGateway
       DeploymentId: !Ref ApiDeployment
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
 
   # Lambda Permission for API Gateway
   LambdaPermission:
