@@ -24,6 +24,9 @@ wheels/
 .aws-sam/
 samconfig.toml
 
+# Deployment
+*.zip
+
 # Test files
 backend/test_document.*
 backend/test_mvp.py
