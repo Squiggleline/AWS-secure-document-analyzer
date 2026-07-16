@@ -20,6 +20,10 @@ wheels/
 .installed.cfg
 *.egg
 
+# SAM Build Artifacts
+.aws-sam/
+samconfig.toml
+
 # Test files
 backend/test_document.*
 backend/test_mvp.py
@@ -29,3 +33,7 @@ backend/create_test_pdf.py
 venv/
 ENV/
 env/
+
+# IDE
+.vscode/
+.idea/

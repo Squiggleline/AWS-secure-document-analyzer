@@ -1,0 +1,3 @@
+# AWS SDK for Python
+# Required for Lambda to interact with S3 and Textract
+boto3>=1.43.39

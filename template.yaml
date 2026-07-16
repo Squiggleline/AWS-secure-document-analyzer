@@ -1,6 +1,14 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: 'Secure Document Analyzer - SAM template for API Gateway and Lambda'
+Description: |
+  # Secure Document Analyzer - AWS SAM Template
+  # 
+  # This template provisions:
+  # - Lambda function for document processing
+  # - API Gateway for REST endpoints
+  # - IAM roles with least-privilege permissions
+  #
+  # Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return text
 
 Globals:
   Function:
@@ -9,45 +17,58 @@ Globals:
     Runtime: python3.12
 
 Parameters:
-  BucketName:
+  # S3 bucket for document storage (KMS encrypted)
+  DocumentBucketName:
     Type: String
     Default: 'ai-security-uploads-2026'
     Description: 'Name of the S3 bucket for document storage'
 
 Resources:
-  # Lambda Function
+  # ============================================================================
+  # Lambda Function - Document Processing
+  # ============================================================================
+  # This function handles:
+  # 1. Receiving file uploads from API Gateway
+  # 2. Storing documents in S3
+  # 3. Extracting text using Amazon Textract
+  # 4. Returning extracted text to the client
   DocumentAnalyzerFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: backend/
-      Handler: lambda_function.lambda_handler
+      CodeUri: src/
+      Handler: app.lambda_handler
       FunctionName: 'secure-document-analyzer'
+      
+      # Environment variables for configuration
       Environment:
         Variables:
-          BUCKET_NAME: !Ref BucketName
+          BUCKET_NAME: !Ref DocumentBucketName
+      
+      # Least-privilege IAM policies
+      # Each policy grants only the minimum required permissions
       Policies:
+        # S3 Access - Only for the specific document bucket
+        - S3CrudPolicy:
+            BucketName: !Ref DocumentBucketName
+        
+        # Textract - Only detect document text (not full analyze)
         - Statement:
-            - Effect: Allow
-              Action:
-                - 's3:GetObject'
-                - 's3:PutObject'
-              Resource: !Sub 'arn:aws:s3:::${BucketName}/*'
             - Effect: Allow
               Action:
                 - 'textract:DetectDocumentText'
               Resource: '*'
+        
+        # KMS - For decrypting/encrypting with KMS keys
+        - Statement:
             - Effect: Allow
               Action:
                 - 'kms:Decrypt'
                 - 'kms:Encrypt'
                 - 'kms:GenerateDataKey'
               Resource: '*'
-            - Effect: Allow
-              Action:
-                - 'logs:CreateLogGroup'
-                - 'logs:CreateLogStream'
-                - 'logs:PutLogEvents'
-              Resource: '*'
+      
+      # API Gateway event trigger
+      # Creates a POST endpoint at /document
       Events:
         DocumentUpload:
           Type: Api
@@ -56,21 +77,35 @@ Resources:
             Method: post
             RestApiId: !Ref DocumentApi
 
-  # API Gateway
+  # ============================================================================
+  # API Gateway - REST API Endpoint
+  # ============================================================================
+  # Provides a public endpoint for document uploads
+  # CORS enabled for web client access
   DocumentApi:
     Type: AWS::Serverless::Api
     Properties:
       Name: 'SecureDocumentAnalyzerAPI'
       StageName: prod
+      
+      # CORS configuration for web clients
       Cors:
         AllowOrigin: "'*'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowMethods: "'POST,OPTIONS'"
 
 Outputs:
+  # ============================================================================
+  # Stack Outputs
+  # ============================================================================
   ApiUrl:
-    Description: 'URL of the API Gateway endpoint'
+    Description: 'URL of the API Gateway endpoint for document uploads'
     Value: !Sub 'https://${DocumentApi}.execute-api.${AWS::Region}.amazonaws.com/prod/document'
+  
   LambdaArn:
     Description: 'ARN of the Lambda function'
     Value: !GetAtt DocumentAnalyzerFunction.Arn
+  
+  DocumentBucket:
+    Description: 'S3 bucket for document storage'
+    Value: !Ref DocumentBucketName
