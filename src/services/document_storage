@@ -1,0 +1,49 @@
+"""
+Document Storage Service
+=========================
+
+Handles S3 operations for document storage.
+
+Service layer used by the Lambda handler to persist documents uploaded
+through API Gateway.
+
+Note: The S3 bucket is configured with default KMS encryption in the
+SAM template (``BucketEncryption.ServerSideEncryptionConfiguration``).
+Uploads therefore rely on the bucket's default encryption — no
+per-request ``ServerSideEncryption`` or ``SSEKMSKeyId`` parameters
+are needed on ``put_object``.
+"""
+
+import logging
+
+import boto3
+
+logger = logging.getLogger(__name__)
+
+try:
+    s3_client = boto3.client("s3")
+except Exception:  # pragma: no cover - permits import without AWS configuration
+    s3_client = None
+
+
+def store_document(bucket_name: str, key: str, body: bytes) -> None:
+    """
+    Store a document in S3.
+
+    Encryption is handled by the bucket's default KMS encryption
+    configuration (set in the SAM template); no per-request encryption
+    parameters are passed.
+
+    Parameters:
+        bucket_name (str): Name of the S3 bucket.
+        key (str): Object key (filename) in the bucket.
+        body (bytes): Raw file content to store.
+
+    Raises:
+        ClientError: If S3 rejects the request.
+    """
+    if s3_client is None:  # pragma: no cover
+        raise RuntimeError("S3 client not initialized")
+
+    s3_client.put_object(Bucket=bucket_name, Key=key, Body=body)
+    logger.info("Document stored", extra={"bucket": bucket_name, "key": key})
