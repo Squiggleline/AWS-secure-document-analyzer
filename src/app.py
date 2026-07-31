@@ -25,7 +25,7 @@ from utils.validators import InvalidRequestError, parse_upload_event
 
 logger = get_logger()
 
-BUCKET_NAME = os.environ.get("BUCKET_NAME", "ai-security-uploads-2026")
+BUCKET_NAME = os.environ["BUCKET_NAME"]
 
 CORS_HEADERS = {
     "Content-Type": "application/json",

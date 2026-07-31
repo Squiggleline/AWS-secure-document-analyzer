@@ -221,10 +221,12 @@ The Lambda execution role includes only the necessary permissions:
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BUCKET_NAME` | S3 bucket for document storage | `ai-security-uploads-2026` |
-| `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
+All configuration is injected by SAM via the template (`Environment.Variables`) — no values are hardcoded in the Lambda code.
+
+| Variable | Description | Source |
+|----------|-------------|--------|
+| `BUCKET_NAME` | S3 bucket for document storage | Set by SAM from the `DocumentBucketName` parameter (**required** — no fallback) |
+| `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | Set by SAM from the `LogLevel` parameter |
 
 ## License
 
