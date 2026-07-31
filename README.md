@@ -21,21 +21,43 @@ User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return extracted text
 
 ```
 secure-document-analyzer/
-├── template.yaml                    # AWS SAM template (main entry point)
-├── src/                            # Lambda function code
-│   ├── app.py                      # Main Lambda handler
-│   └── requirements.txt            # Python dependencies
-├── backend/                        # CLI tools for local testing
-│   ├── main.py                     # CLI interface
-│   ├── s3_upload.py                # S3 upload module
-│   └── textract_analyzer.py        # Textract module
+├── template.yaml                    # AWS SAM template (single source of truth)
+├── samconfig.toml                   # SAM deployment defaults
+├── Makefile                         # Build/test/deploy/clean tasks
+├── requirements-dev.txt             # Dev/test dependencies (pytest + runtime)
+├── src/                             # Lambda function code
+│   ├── app.py                       # Thin Lambda handler (orchestration)
+│   ├── requirements.txt             # Runtime dependencies (deployed to Lambda)
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── document_storage.py      # S3 storage operations
+│   │   └── text_extraction.py       # Textract text extraction
+│   └── utils/
+│       ├── __init__.py
+│       ├── logger.py                # Structured logging configuration
+│       └── validators.py            # Event validation & parsing
+├── events/                          # Sample events for `sam local invoke`
+│   ├── document-upload-valid.json
+│   └── document-upload-missing-body.json
+├── tests/
+│   ├── conftest.py                  # Shared fixtures & path setup
+│   └── unit/
+│       ├── __init__.py
+│       ├── test_app.py              # Handler tests
+│       ├── test_document_storage.py # S3 service tests
+│       └── test_text_extraction.py  # Textract service tests
+├── scripts/                         # Cross-platform automation
+│   ├── deploy.sh                    # Bash deployment
+│   ├── deploy.ps1                   # PowerShell deployment
+│   ├── test.sh                      # Bash test runner
+│   └── test.ps1                     # PowerShell test runner
 ├── infrastructure/
-│   ├── cloudformation/
-│   │   └── lambda-api.yml          # Alternative CloudFormation template
-│   └── iam_policy.json             # IAM permissions reference
+│   ├── iam_policy.json              # IAM permissions reference
+│   └── README.md
 ├── docs/
-│   ├── architecture.md             # Architecture documentation
-│   └── deployment.md               # Deployment guide
+│   ├── architecture.md              # Architecture documentation
+│   └── deployment.md                # Deployment guide
+├── frontend/                        # Web client (if applicable)
 └── .gitignore
 ```
 
@@ -58,21 +80,18 @@ secure-document-analyzer/
 ### 1. Build the Application
 
 ```bash
-sam build
+make build
+# or: sam build
 ```
 
 ### 2. Deploy to AWS
 
 ```bash
-sam deploy --guided
+make deploy
+# or: sam deploy --guided
 ```
 
-Answer the prompts:
-- Stack name: `secure-document-analyzer`
-- AWS Region: `us-east-1` (or your preferred region)
-- Confirm changes before deploy: `Y`
-- Allow SAM to create IAM roles: `Y`
-- Save arguments to samconfig.toml: `Y`
+The first deployment will prompt for parameters. Subsequent deployments use `samconfig.toml` defaults.
 
 #### Deployment Parameters
 
@@ -81,6 +100,7 @@ Answer the prompts:
 | `CreateBucket` | Create new S3 bucket (true) or use existing (false) | `false` |
 | `DocumentBucketName` | S3 bucket name for document storage | `ai-security-uploads-2026` |
 | `KmsKeyId` | KMS key ID for encryption (optional) | (empty) |
+| `LogLevel` | Logging level for the Lambda function | `INFO` |
 
 ### 3. Test the API
 
@@ -93,18 +113,68 @@ curl -X POST https://<api-id>.execute-api.<region>.amazonaws.com/prod/document \
   --data-binary @test.pdf
 ```
 
-## Local Testing
+## Local Development
 
-Use the CLI version for local testing:
+### Install Dev Dependencies
 
 ```bash
-python backend/main.py <file_path> [bucket_name]
+pip install -r requirements-dev.txt
 ```
 
-Example:
+This installs pytest plus the runtime dependencies (boto3) needed to run the test suite locally.
+
+### Run Tests
+
 ```bash
-python backend/main.py my_document.pdf ai-security-uploads-2026
+make test
+# or: python -m pytest
 ```
+
+### Invoke Locally with SAM
+
+```bash
+# Valid upload event
+sam local invoke --event events/document-upload-valid.json
+
+# Missing body event (expects a 400 response)
+sam local invoke --event events/document-upload-missing-body.json
+
+# Start the API locally
+sam local start-api
+```
+
+### Manual Scripts
+
+For environments without `make`:
+
+```bash
+# Bash
+./scripts/test.sh
+./scripts/deploy.sh
+
+# PowerShell
+.\scripts\test.ps1
+.\scripts\deploy.ps1
+```
+
+## Code Layout
+
+Thin handler design keeps `app.py` focused on orchestration:
+
+```
+API Gateway event
+    │
+    ▼
+app.lambda_handler ──► utils/validators.parse_upload_event
+    │
+    ├──► services/document_storage.store_document  (S3)
+    └──► services/text_extraction.extract_lines    (Textract)
+```
+
+- **`app.py`** - Parses the event, orchestrates the workflow, builds the response.
+- **`services/`** - Reusable business logic (S3 storage, Textract extraction).
+- **`utils/`** - Cross-cutting helpers (logging, validation).
+- **`tests/unit/`** - Tests for the deployed Lambda code, using pytest fixtures to mock AWS clients.
 
 ## IAM Permissions (Least-Privilege)
 
@@ -134,6 +204,7 @@ The Lambda execution role includes only the necessary permissions:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `BUCKET_NAME` | S3 bucket for document storage | `ai-security-uploads-2026` |
+| `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | `INFO` |
 
 ## License
 

@@ -1,0 +1,7 @@
+{
+  "body": "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IGRvY3VtZW50Lg==",
+  "headers": {
+    "Content-Type": "application/json",
+    "filename": "sample.pdf"
+  }
+}

@@ -1,0 +1,24 @@
+# =============================================================================
+# Development and test dependencies for the Secure Document Analyzer
+# =============================================================================
+# Install with:
+#   pip install -r requirements-dev.txt
+#
+# Includes the runtime dependencies (from src/requirements.txt) plus
+# packages needed only for local development and testing.
+# =============================================================================
+
+# Runtime dependencies (S3 + Textract clients, etc.)
+-r src/requirements.txt
+
+# pytest - Test framework used by tests/unit/*
+# Provides fixtures (via tests/conftest.py), test discovery/collection
+# (configured in pytest.ini), and command-line options (-v --tb=short).
+# Used by:
+#   - tests/conftest.py
+#   - tests/unit/test_app.py
+#   - tests/unit/test_document_storage.py
+#   - tests/unit/test_text_extraction.py
+# Note: The tests also use unittest.mock (standard library) for mocking
+# AWS clients - no extra package needed for that.
+pytest>=9.0

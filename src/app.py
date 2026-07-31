@@ -1,188 +1,112 @@
 """
-Secure Document Analyzer - Lambda Function
+Secure Document Analyzer - Lambda Handler
 ==========================================
 
-This Lambda function handles document processing:
-1. Receives file uploads from API Gateway
-2. Stores documents in S3
-3. Extracts text using Amazon Textract
-4. Returns extracted text to the client
+Thin Lambda handler that orchestrates the document analysis workflow:
 
-Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return text
+1. Parse the API Gateway upload event.
+2. Store the document in S3.
+3. Extract text with Amazon Textract.
+4. Return the extracted text to the client.
+
+Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Response
 """
 
 import json
-import boto3
 import os
-import base64
-import logging
+
 from botocore.exceptions import ClientError
 
-# =============================================================================
-# Structured Logging Configuration
-# =============================================================================
-# Using Python's standard logging module for structured CloudWatch logs
-# This provides consistent log format with timestamps, levels, and context
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from services.document_storage import store_document
+from services.text_extraction import extract_lines
+from utils.logger import get_logger
+from utils.validators import InvalidRequestError, parse_upload_event
 
-# =============================================================================
-# Environment Variables
-# =============================================================================
-# All configuration is loaded from environment variables for flexibility
-# These can be set in the SAM template or Lambda console
-BUCKET_NAME = os.environ.get('BUCKET_NAME', 'ai-security-uploads-2026')
-LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+logger = get_logger()
 
-# Set log level from environment
-logger.setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "ai-security-uploads-2026")
 
-# =============================================================================
-# AWS Clients
-# =============================================================================
-# Initialize AWS clients outside the handler for connection reuse
-# This improves performance by avoiding re-initialization on each invocation
-s3_client = boto3.client('s3')
-textract_client = boto3.client('textract')
+CORS_HEADERS = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",  # CORS for web clients
+}
 
 
-def lambda_handler(event, context):
+def _json_response(status_code: int, body: dict) -> dict:
+    """Build a standard API Gateway JSON response."""
+    return {
+        "statusCode": status_code,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(body),
+    }
+
+
+def lambda_handler(event: dict, context=None) -> dict:
     """
     Main Lambda handler function.
-    
+
     Parameters:
-        event: The event data from API Gateway
-        context: Lambda context (contains request ID, memory, etc.)
-    
+        event (dict): The event data from API Gateway.
+        context: Lambda context (optional; used for request tracing).
+
     Returns:
-        dict: API Gateway response with extracted text or error message
+        dict: API Gateway response with extracted text or an error message.
     """
-    
-    # Log the incoming request with context
-    logger.info("Lambda invocation started", extra={
-        'request_id': context.aws_request_id if context else 'local',
-        'function_name': context.function_name if context else 'local',
-        'event_keys': list(event.keys()) if event else []
-    })
-    
     try:
-        # Step 1: Validate the request
-        # API Gateway sends the file in the body (base64 encoded)
-        if 'body' not in event:
-            logger.warning("Request missing body", extra={'event': str(event)[:200]})
-            return {
-                'statusCode': 400,
-                'body': json.dumps({
-                    'error': 'No file provided in request',
-                    'message': 'Please provide a file in the request body'
-                })
-            }
-        
-        # Step 2: Decode the file content
-        # The body is base64 encoded by API Gateway
-        file_content = base64.b64decode(event['body'])
-        logger.info("File received", extra={
-            'file_size_bytes': len(file_content)
-        })
-        
-        # Step 3: Get filename from headers
-        # Client should provide filename in the header
-        headers = event.get('headers', {}) or {}
-        filename = headers.get('filename', 'uploaded_document.pdf')
-        logger.info("Processing file", extra={
-            'filename': filename,
-            'bucket': BUCKET_NAME
-        })
-        
-        # Step 4: Upload to S3
-        # The document is stored in the configured bucket
-        s3_client.put_object(
-            Bucket=BUCKET_NAME,
-            Key=filename,
-            Body=file_content
-        )
-        logger.info("File uploaded to S3", extra={
-            'filename': filename,
-            'bucket': BUCKET_NAME
-        })
-        
-        # Step 5: Extract text with Textract
-        # Textract processes PDF, PNG, JPG, and TIFF files
-        response = textract_client.detect_document_text(
-            Document={
-                'S3Object': {
-                    'Bucket': BUCKET_NAME,
-                    'Name': filename
-                }
-            }
-        )
-        
-        # Step 6: Parse the extracted text
-        # Textract returns blocks; we extract LINE blocks
-        extracted_text = ""
-        block_count = 0
-        for block in response.get('Blocks', []):
-            if block['BlockType'] == 'LINE':
-                extracted_text += block['Text'] + "\n"
-                block_count += 1
-        
-        logger.info("Text extraction complete", extra={
-            'filename': filename,
-            'line_count': block_count,
-            'text_length': len(extracted_text)
-        })
-        
-        # Step 7: Return the response
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'  # CORS for web clients
+        request = parse_upload_event(event)
+
+        logger.info(
+            "Lambda invocation started",
+            extra={
+                "request_id": getattr(context, "aws_request_id", "local"),
+                "document_name": request.filename,
             },
-            'body': json.dumps({
-                'message': 'Document processed successfully',
-                'filename': filename,
-                'extracted_text': extracted_text
-            })
-        }
-        
+        )
+
+        # Persist the document to S3
+        store_document(BUCKET_NAME, request.filename, request.content)
+
+        # Extract text using Textract
+        extracted_text = extract_lines(BUCKET_NAME, request.filename)
+
+        return _json_response(
+            200,
+            {
+                "message": "Document processed successfully",
+                "filename": request.filename,
+                "extracted_text": extracted_text,
+            },
+        )
+
+    except InvalidRequestError as e:
+        logger.warning("Invalid request", extra={"reason": str(e)})
+        return _json_response(400, {"error": str(e), "message": str(e)})
+
     except ClientError as e:
-        # Handle AWS service errors
-        error_code = e.response.get('Error', {}).get('Code', 'Unknown')
-        error_message = e.response.get('Error', {}).get('Message', str(e))
-        
-        logger.error("AWS service error", extra={
-            'error_code': error_code,
-            'error_message': error_message
-        })
-        
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': f'AWS Error: {error_code}',
-                'message': error_message
-            })
-        }
-    except Exception as e:
-        # Handle unexpected errors
-        logger.error("Unexpected error", extra={
-            'error_type': type(e).__name__,
-            'error_message': str(e)
-        })
-        
-        return {
-            'statusCode': 500,
-            'body': json.dumps({
-                'error': 'Internal error',
-                'message': str(e)
-            })
-        }
+        error_code = e.response.get("Error", {}).get("Code", "Unknown")
+        error_message = e.response.get("Error", {}).get("Message", str(e))
+        logger.error(
+            "AWS service error",
+            extra={"error_code": error_code, "error_message": error_message},
+        )
+        return _json_response(
+            500,
+            {"error": f"AWS Error: {error_code}", "message": error_message},
+        )
+
+    except Exception as e:  # noqa: BLE001 - last-resort guard for the handler
+        logger.error(
+            "Unexpected error",
+            extra={"error_type": type(e).__name__, "error_message": str(e)},
+        )
+        return _json_response(500, {"error": "Internal error", "message": str(e)})
 
 
 # For local testing
 if __name__ == "__main__":
-    print("Secure Document Analyzer - Lambda Function")
+    print("Secure Document Analyzer - Lambda Handler")
     print("=" * 50)
-    print("\nThis function is designed to be deployed to AWS Lambda.")
-    print("It will be triggered by API Gateway when a file is uploaded.")
-    print("\nFor local testing, you can use the CLI version in backend/main.py")
+    print("\nThis module is deployed as an AWS Lambda function and")
+    print("triggered by API Gateway when a document is uploaded.")
+    print("\nFor local invocation, use the AWS SAM CLI:")
+    print("  sam local invoke --event events/document-upload-valid.json")

@@ -1,3 +1,17 @@
-# AWS SDK for Python
-# Required for Lambda to interact with S3 and Textract
+# =============================================================================
+# Runtime dependencies for the Secure Document Analyzer Lambda function
+# =============================================================================
+# These packages are bundled with the Lambda deployment via `sam build`.
+# Only packages imported directly by the deployed code are listed here.
+#
+# Standard library modules used (no pip install needed):
+#   json, os, base64, logging, dataclasses
+# =============================================================================
+
+# boto3 - AWS SDK for Python
+# Provides the S3 and Textract service clients used by:
+#   - src/services/document_storage.py  (s3_client -> store_document)
+#   - src/services/text_extraction.py   (textract_client -> extract_text)
+# Note: botocore (its transitive dependency) provides the
+# ClientError exception type imported in src/app.py and the tests.
 boto3>=1.43.39

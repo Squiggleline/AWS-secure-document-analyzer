@@ -22,15 +22,9 @@ wheels/
 
 # SAM Build Artifacts
 .aws-sam/
-samconfig.toml
 
 # Deployment
 *.zip
-
-# Test files
-backend/test_document.*
-backend/test_mvp.py
-backend/create_test_pdf.py
 
 # Pytest
 .pytest_cache/
