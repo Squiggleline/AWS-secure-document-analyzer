@@ -34,6 +34,7 @@ secure-document-analyzer/
 │   │   └── text_extraction.py       # Textract text extraction
 │   └── utils/
 │       ├── __init__.py
+│       ├── errors.py                # AWS error -> HTTP status mapping
 │       ├── logger.py                # Structured logging configuration
 │       └── validators.py            # Event validation & parsing
 ├── events/                          # Sample events for `sam local invoke`
@@ -173,8 +174,27 @@ app.lambda_handler ──► utils/validators.parse_upload_event
 
 - **`app.py`** - Parses the event, orchestrates the workflow, builds the response.
 - **`services/`** - Reusable business logic (S3 storage, Textract extraction).
-- **`utils/`** - Cross-cutting helpers (logging, validation).
+- **`utils/`** - Cross-cutting helpers (logging, validation, AWS error-to-HTTP mapping).
 - **`tests/unit/`** - Tests for the deployed Lambda code, using pytest fixtures to mock AWS clients.
+
+## Error Handling
+
+The handler returns meaningful HTTP status codes for different failure categories:
+
+| Status | Scenario |
+|--------|----------|
+| `400` | Missing/invalid request body, invalid base64, `InvalidParameter`, `InvalidS3ObjectException` |
+| `403` | `AccessDenied` / authorization failures |
+| `404` | `NoSuchBucket`, `NoSuchKey`, `ResourceNotFoundException` |
+| `409` | `BucketAlreadyExists`, `Conflict` |
+| `413` | `EntityTooLarge`, `DocumentTooLargeException` |
+| `415` | `UnsupportedDocumentException` (unsupported file type) |
+| `422` | `BadDocumentException` (corrupt/unreadable document) |
+| `429` | `Throttling`, `SlowDown`, rate limits |
+| `500` | Unexpected runtime errors / unmapped AWS codes |
+| `503` | `ServiceUnavailable` |
+
+The mapping lives in `src/utils/errors.py` and every failure is logged with structured context (`error_code`, `error_message`, `http_status`).
 
 ## IAM Permissions (Least-Privilege)
 

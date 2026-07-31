@@ -2,7 +2,6 @@
 Unit tests for src/app.py (Lambda handler).
 """
 
-import base64
 import json
 from unittest.mock import patch
 
@@ -74,18 +73,76 @@ class TestLambdaHandler:
         assert result["statusCode"] == 400
 
     @patch("app.store_document")
-    def test_client_error_returns_500(self, mock_store):
-        """Test that AWS service errors return 500 with error details."""
+    @pytest.mark.parametrize(
+        "error_code,expected_status",
+        [
+            ("AccessDenied", 403),
+            ("InvalidParameter", 400),
+            ("EntityTooLarge", 413),
+            ("NoSuchBucket", 404),
+            ("Throttling", 429),
+            ("ServiceUnavailable", 503),
+            ("SomeUnknownCode", 500),
+        ],
+    )
+    def test_client_error_maps_to_http_status(
+        self, mock_store, error_code, expected_status
+    ):
+        """Test that AWS service errors map to meaningful HTTP status codes."""
         mock_store.side_effect = ClientError(
-            {"Error": {"Code": "AccessDenied", "Message": "Access denied"}},
+            {"Error": {"Code": error_code, "Message": "Message"}},
             "PutObject",
         )
 
         result = app.lambda_handler(_make_event(), context=None)
 
-        assert result["statusCode"] == 500
+        assert result["statusCode"] == expected_status
         body = json.loads(result["body"])
-        assert "AWS Error: AccessDenied" in body["error"]
+        assert f"AWS Error: {error_code}" in body["error"]
+
+    @patch("app.store_document")
+    def test_client_error_returns_message(self, mock_store):
+        """Test that AWS service errors include the service message."""
+        mock_store.side_effect = ClientError(
+            {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}},
+            "PutObject",
+        )
+
+        result = app.lambda_handler(_make_event(), context=None)
+
+        assert result["statusCode"] == 429
+        body = json.loads(result["body"])
+        assert body["message"] == "Rate exceeded"
+
+    @patch("app.extract_lines")
+    @patch("app.store_document")
+    def test_textract_bad_document_maps_to_422(self, mock_store, mock_extract):
+        """Test that a Textract BadDocumentException returns 422."""
+        mock_extract.side_effect = ClientError(
+            {"Error": {"Code": "BadDocumentException", "Message": "Bad document"}},
+            "DetectDocumentText",
+        )
+
+        result = app.lambda_handler(_make_event(), context=None)
+
+        assert result["statusCode"] == 422
+        body = json.loads(result["body"])
+        assert "BadDocumentException" in body["error"]
+
+    @patch("app.extract_lines")
+    @patch("app.store_document")
+    def test_textract_unsupported_document_maps_to_415(self, mock_store, mock_extract):
+        """Test that a Textract UnsupportedDocumentException returns 415."""
+        mock_extract.side_effect = ClientError(
+            {"Error": {"Code": "UnsupportedDocumentException", "Message": "Unsupported type"}},
+            "DetectDocumentText",
+        )
+
+        result = app.lambda_handler(_make_event(), context=None)
+
+        assert result["statusCode"] == 415
+        body = json.loads(result["body"])
+        assert "UnsupportedDocumentException" in body["error"]
 
     @patch("app.extract_lines")
     @patch("app.store_document")

@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError
 
 from services.document_storage import store_document
 from services.text_extraction import extract_lines
+from utils.errors import http_status_for_aws_error
 from utils.logger import get_logger
 from utils.validators import InvalidRequestError, parse_upload_event
 
@@ -85,12 +86,17 @@ def lambda_handler(event: dict, context=None) -> dict:
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_message = e.response.get("Error", {}).get("Message", str(e))
+        status_code = http_status_for_aws_error(error_code)
         logger.error(
             "AWS service error",
-            extra={"error_code": error_code, "error_message": error_message},
+            extra={
+                "error_code": error_code,
+                "error_message": error_message,
+                "http_status": status_code,
+            },
         )
         return _json_response(
-            500,
+            status_code,
             {"error": f"AWS Error: {error_code}", "message": error_message},
         )
 
