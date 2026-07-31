@@ -206,6 +206,17 @@ The Lambda execution role includes only the necessary permissions:
 - **KMS** - Decrypt, Encrypt, GenerateDataKey for encryption
 - **CloudWatch** - Basic execution role for logging
 
+## S3 Bucket Protection
+
+When the bucket is created by the template (`CreateBucket=true`), the following protections are enabled:
+
+| Protection | Purpose |
+|------------|---------|
+| **KMS encryption** | Server-side encryption with `aws:kms` on all objects |
+| **Public access block** | Blocks all public ACLs and bucket policies |
+| **Versioning** | Preserves all object versions — protects against accidental overwrites when the same filename is re-uploaded |
+| **Lifecycle rule** | Transitions noncurrent versions to Glacier after 90 days and expires them after 365 days (controls cost while retaining recent history) |
+
 ## API Endpoints
 
 | Method | Endpoint | Description |

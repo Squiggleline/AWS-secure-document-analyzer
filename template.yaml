@@ -83,6 +83,25 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      # Enable versioning to protect against accidental overwrites/deletes.
+      # The Lambda handler uses the client-supplied filename as the S3 key,
+      # so re-uploading the same filename would silently overwrite the
+      # previous object. Versioning preserves all versions for audit and
+      # recovery.
+      VersioningConfiguration:
+        Status: Enabled
+      # Lifecycle rule: transition noncurrent (older) versions to
+      # Glacier after 90 days and expire them after 365 days to
+      # control storage costs while retaining recent history.
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireNoncurrentVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - NoncurrentDays: 90
+                StorageClass: GLACIER
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
 
   # ============================================================================
   # Lambda Function - Document Processing
