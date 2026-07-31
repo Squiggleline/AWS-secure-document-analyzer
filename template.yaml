@@ -51,6 +51,11 @@ Parameters:
       - 'ERROR'
     Description: 'Log level for Lambda function'
 
+  MaxFileSizeBytes:
+    Type: Number
+    Default: '10485760'
+    Description: 'Maximum upload file size in bytes (default: 10 MB)'
+
 Conditions:
   # Condition to check if we should create a new bucket
   ShouldCreateBucket: !Equals [!Ref CreateBucket, 'true']
@@ -100,6 +105,7 @@ Resources:
         Variables:
           BUCKET_NAME: !Ref DocumentBucketName
           LOG_LEVEL: !Ref LogLevel
+          MAX_FILE_SIZE_BYTES: !Ref MaxFileSizeBytes
       
       # Least-privilege IAM policies
       # Each policy grants only the minimum required permissions
