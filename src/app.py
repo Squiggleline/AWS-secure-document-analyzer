@@ -104,9 +104,16 @@ def lambda_handler(event: dict, context=None) -> dict:
 
 # For local testing
 if __name__ == "__main__":
-    print("Secure Document Analyzer - Lambda Handler")
-    print("=" * 50)
-    print("\nThis module is deployed as an AWS Lambda function and")
-    print("triggered by API Gateway when a document is uploaded.")
-    print("\nFor local invocation, use the AWS SAM CLI:")
-    print("  sam local invoke --event events/document-upload-valid.json")
+    logger.info(
+        "Secure Document Analyzer - Lambda Handler",
+        extra={"module": __name__},
+    )
+    logger.info(
+        "This module is deployed as an AWS Lambda function and "
+        "triggered by API Gateway when a document is uploaded.",
+        extra={"architecture": "User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Response"},
+    )
+    logger.info(
+        "For local invocation, use the AWS SAM CLI",
+        extra={"command": "sam local invoke --event events/document-upload-valid.json"},
+    )
