@@ -38,7 +38,10 @@ class TestLambdaHandler:
         assert body["filename"] == "report.pdf"
         assert body["extracted_text"] == "Hello World\nThis is a test"
         mock_store.assert_called_once_with(
-            app.BUCKET_NAME, "report.pdf", b"Hello World"
+            app.BUCKET_NAME,
+            "report.pdf",
+            b"Hello World",
+            original_filename="report.pdf",
         )
         mock_extract.assert_called_once_with(app.BUCKET_NAME, "report.pdf")
 
@@ -55,7 +58,10 @@ class TestLambdaHandler:
         body = json.loads(result["body"])
         assert body["filename"] == "uploaded_document.pdf"
         mock_store.assert_called_once_with(
-            app.BUCKET_NAME, "uploaded_document.pdf", b"Hello World"
+            app.BUCKET_NAME,
+            "uploaded_document.pdf",
+            b"Hello World",
+            original_filename="uploaded_document.pdf",
         )
 
     def test_missing_body_returns_400(self):

@@ -64,8 +64,13 @@ def lambda_handler(event: dict, context=None) -> dict:
             },
         )
 
-        # Persist the document to S3
-        store_document(BUCKET_NAME, request.filename, request.content)
+        # Persist the document to S3 (with metadata: timestamp, content type, filename)
+        store_document(
+            BUCKET_NAME,
+            request.filename,
+            request.content,
+            original_filename=request.filename,
+        )
 
         # Extract text using Textract
         extracted_text = extract_lines(BUCKET_NAME, request.filename)
