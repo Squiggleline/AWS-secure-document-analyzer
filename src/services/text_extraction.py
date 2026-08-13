@@ -68,40 +68,45 @@ def extract_text(
     return response
 
 
-def parse_text_blocks(response: dict) -> str:
+def parse_text_blocks(response: dict) -> list[dict]:
     """
-    Parse a Textract response and extract LINE block text.
+    Parse a Textract response and extract LINE block text with confidence.
 
     Filters the response for blocks of type ``LINE`` that contain text,
-    then joins them with newlines.
+    returning each line's text and confidence score.
 
     Parameters:
         response (dict): The raw Textract response containing a
             ``Blocks`` list.
 
     Returns:
-        str: The concatenated text from all LINE blocks, joined by
-            newlines. Returns an empty string if no LINE blocks are
-            found.
+        list[dict]: A list of dicts, each with ``text`` (str) and
+            ``confidence`` (float, rounded to 2 decimal places) keys.
+            Returns an empty list if no LINE blocks are found.
     """
-    lines = [
-        block["Text"]
-        for block in response.get("Blocks", [])
-        if block.get("BlockType") == "LINE" and block.get("Text")
-    ]
-    return "\n".join(lines)
+    lines = []
+    for block in response.get("Blocks", []):
+        if block.get("BlockType") == "LINE" and block.get("Text"):
+            lines.append(
+                {
+                    "text": block["Text"],
+                    "confidence": round(block.get("Confidence", 0.0), 2),
+                }
+            )
+    return lines
 
 
-def extract_lines(bucket_name: str, document_name: str) -> str:
+def extract_lines(bucket_name: str, document_name: str) -> list[dict]:
     """
-    Extract just the LINE blocks as a newline-joined string.
+    Extract LINE blocks with text and confidence from a document.
 
     Parameters:
         bucket_name (str): Name of the S3 bucket containing the document.
         document_name (str): Object key (filename) in the bucket.
 
     Returns:
-        str: The concatenated text from all LINE blocks.
+        list[dict]: A list of dicts, each with ``text`` and ``confidence``
+            keys for every LINE block in the document.
 
     Raises:
         ClientError: If Textract rejects the request.

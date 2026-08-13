@@ -28,7 +28,10 @@ class TestLambdaHandler:
     @patch("app.store_document")
     def test_success_with_custom_filename(self, mock_store, mock_extract):
         """Test successful processing with a filename header."""
-        mock_extract.return_value = "Hello World\nThis is a test"
+        mock_extract.return_value = [
+            {"text": "Hello World", "confidence": 99.5},
+            {"text": "This is a test", "confidence": 98.2},
+        ]
         event = _make_event(headers={"filename": "report.pdf"})
 
         result = app.lambda_handler(event, context=None)
@@ -37,6 +40,10 @@ class TestLambdaHandler:
         body = json.loads(result["body"])
         assert body["filename"] == "report.pdf"
         assert body["extracted_text"] == "Hello World\nThis is a test"
+        assert body["lines"] == [
+            {"text": "Hello World", "confidence": 99.5},
+            {"text": "This is a test", "confidence": 98.2},
+        ]
         mock_store.assert_called_once_with(
             app.BUCKET_NAME,
             "report.pdf",
@@ -49,7 +56,7 @@ class TestLambdaHandler:
     @patch("app.store_document")
     def test_success_with_default_filename(self, mock_store, mock_extract):
         """Test successful processing without a filename header."""
-        mock_extract.return_value = "Content"
+        mock_extract.return_value = [{"text": "Content", "confidence": 95.0}]
         event = _make_event()
 
         result = app.lambda_handler(event, context=None)
@@ -57,6 +64,8 @@ class TestLambdaHandler:
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["filename"] == "uploaded_document.pdf"
+        assert body["extracted_text"] == "Content"
+        assert body["lines"] == [{"text": "Content", "confidence": 95.0}]
         mock_store.assert_called_once_with(
             app.BUCKET_NAME,
             "uploaded_document.pdf",

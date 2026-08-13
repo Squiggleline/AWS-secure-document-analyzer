@@ -72,8 +72,9 @@ def lambda_handler(event: dict, context=None) -> dict:
             original_filename=request.filename,
         )
 
-        # Extract text using Textract
-        extracted_text = extract_lines(BUCKET_NAME, request.filename)
+        # Extract text using Textract (returns lines with confidence scores)
+        extracted_lines = extract_lines(BUCKET_NAME, request.filename)
+        extracted_text = "\n".join(line["text"] for line in extracted_lines)
 
         return _json_response(
             200,
@@ -81,6 +82,7 @@ def lambda_handler(event: dict, context=None) -> dict:
                 "message": "Document processed successfully",
                 "filename": request.filename,
                 "extracted_text": extracted_text,
+                "lines": extracted_lines,
             },
         )
 
