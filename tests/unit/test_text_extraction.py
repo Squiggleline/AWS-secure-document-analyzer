@@ -5,7 +5,7 @@ Unit tests for src/services/text_extraction.py.
 import pytest
 from botocore.exceptions import ClientError
 
-from services.text_extraction import extract_lines, extract_text
+from services.text_extraction import extract_lines, extract_text, parse_text_blocks
 
 
 class TestExtractText:
@@ -47,6 +47,60 @@ class TestExtractText:
 
         with pytest.raises(ClientError):
             extract_text("test-bucket", "invalid.txt")
+
+
+class TestParseTextBlocks:
+    """Test cases for the parse_text_blocks helper."""
+
+    def test_parse_returns_joined_line_blocks(self):
+        """Test that LINE blocks are joined with newlines."""
+        response = {
+            "Blocks": [
+                {"BlockType": "LINE", "Text": "Hello World"},
+                {"BlockType": "LINE", "Text": "This is a test document"},
+                {"BlockType": "WORD", "Text": "ignored"},
+            ]
+        }
+
+        result = parse_text_blocks(response)
+
+        assert result == "Hello World\nThis is a test document"
+
+    def test_parse_empty_blocks_returns_empty_string(self):
+        """Test that an empty Blocks list returns an empty string."""
+        assert parse_text_blocks({"Blocks": []}) == ""
+
+    def test_parse_skips_blocks_without_text(self):
+        """Test that LINE blocks missing Text are skipped."""
+        response = {
+            "Blocks": [
+                {"BlockType": "LINE", "Text": ""},
+                {"BlockType": "LINE", "Text": "Only one line"},
+                {"BlockType": "LINE"},
+            ]
+        }
+
+        result = parse_text_blocks(response)
+
+        assert result == "Only one line"
+
+    def test_parse_missing_blocks_key_returns_empty_string(self):
+        """Test that a response without a Blocks key returns an empty string."""
+        assert parse_text_blocks({}) == ""
+
+    def test_parse_ignores_non_line_blocks(self):
+        """Test that only LINE blocks are extracted."""
+        response = {
+            "Blocks": [
+                {"BlockType": "WORD", "Text": "word1"},
+                {"BlockType": "TABLE", "Text": "table"},
+                {"BlockType": "LINE", "Text": "line1"},
+            ]
+        }
+
+        result = parse_text_blocks(response)
+
+        assert result == "line1"
 
 
 class TestExtractLines:

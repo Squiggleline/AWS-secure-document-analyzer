@@ -68,6 +68,30 @@ def extract_text(
     return response
 
 
+def parse_text_blocks(response: dict) -> str:
+    """
+    Parse a Textract response and extract LINE block text.
+
+    Filters the response for blocks of type ``LINE`` that contain text,
+    then joins them with newlines.
+
+    Parameters:
+        response (dict): The raw Textract response containing a
+            ``Blocks`` list.
+
+    Returns:
+        str: The concatenated text from all LINE blocks, joined by
+            newlines. Returns an empty string if no LINE blocks are
+            found.
+    """
+    lines = [
+        block["Text"]
+        for block in response.get("Blocks", [])
+        if block.get("BlockType") == "LINE" and block.get("Text")
+    ]
+    return "\n".join(lines)
+
+
 def extract_lines(bucket_name: str, document_name: str) -> str:
     """
     Extract just the LINE blocks as a newline-joined string.
@@ -83,10 +107,4 @@ def extract_lines(bucket_name: str, document_name: str) -> str:
         ClientError: If Textract rejects the request.
     """
     response = extract_text(bucket_name, document_name)
-
-    lines = [
-        block["Text"]
-        for block in response.get("Blocks", [])
-        if block.get("BlockType") == "LINE" and block.get("Text")
-    ]
-    return "\n".join(lines)
+    return parse_text_blocks(response)
