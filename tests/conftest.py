@@ -74,3 +74,63 @@ def textract_response():
             {"BlockType": "WORD", "Id": "word-3", "Page": 1, "Text": "test", "Confidence": 97.9},
         ],
     }
+
+
+@pytest.fixture
+def api_gateway_event():
+    """
+    Build a realistic API Gateway proxy event.
+
+    Simulates the full event structure that API Gateway sends to the
+    Lambda handler, including requestContext, multiValueHeaders,
+    queryStringParameters, pathParameters, stageVariables, and
+    isBase64Encoded.
+    """
+    import base64
+
+    def _build(
+        body: bytes | None = b"Hello World",
+        filename: str | None = "report.pdf",
+        http_method: str = "POST",
+        path: str = "/document",
+        request_id: str = "test-request-id-123",
+    ) -> dict:
+        event = {
+            "resource": path,
+            "path": path,
+            "httpMethod": http_method,
+            "headers": {
+                "Content-Type": "application/octet-stream",
+                "filename": filename,
+                "User-Agent": "curl/8.0.1",
+                "Accept": "*/*",
+            },
+            "multiValueHeaders": {
+                "Content-Type": ["application/octet-stream"],
+                "filename": [filename],
+                "User-Agent": ["curl/8.0.1"],
+                "Accept": ["*/*"],
+            },
+            "queryStringParameters": None,
+            "multiValueQueryStringParameters": None,
+            "pathParameters": None,
+            "stageVariables": None,
+            "requestContext": {
+                "resourceId": "abc123",
+                "resourcePath": path,
+                "httpMethod": http_method,
+                "requestId": request_id,
+                "accountId": "123456789012",
+                "identity": {
+                    "sourceIp": "203.0.113.1",
+                    "userAgent": "curl/8.0.1",
+                },
+                "stage": "prod",
+                "apiId": "api123",
+            },
+            "body": base64.b64encode(body).decode("utf-8") if body is not None else None,
+            "isBase64Encoded": True,
+        }
+        return event
+
+    return _build
