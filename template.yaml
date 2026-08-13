@@ -135,25 +135,37 @@ Resources:
       # Least-privilege IAM policies
       # Each policy grants only the minimum required permissions
       Policies:
-        # S3 Access - Only for the specific document bucket
-        - S3CrudPolicy:
-            BucketName: !Ref DocumentBucketName
-        
-        # Textract - Only detect document text (not full analyze)
+        # S3 Access - Only PutObject and GetObject on the specific document bucket.
+        # S3CrudPolicy grants DeleteObject, PutObjectAcl, and other unnecessary
+        # permissions, so we use an explicit statement instead.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 's3:PutObject'
+                - 's3:GetObject'
+              Resource: !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}/*'
+
+        # Textract - Only detect document text (not full analyze).
+        # Textract does not support resource-level permissions, so '*' is
+        # required here. This is the minimum Textract action needed.
         - Statement:
             - Effect: Allow
               Action:
                 - 'textract:DetectDocumentText'
               Resource: '*'
-        
-        # KMS - For decrypting/encrypting with KMS keys
+
+        # KMS - Only Decrypt on the bucket's KMS key.
+        # The Lambda reads objects from S3 (which are KMS-encrypted), so it
+        # needs kms:Decrypt. Encrypt and GenerateDataKey are not needed
+        # because the Lambda does not write KMS-encrypted data directly.
         - Statement:
             - Effect: Allow
               Action:
                 - 'kms:Decrypt'
-                - 'kms:Encrypt'
-                - 'kms:GenerateDataKey'
-              Resource: '*'
+              Resource: !If
+                - ShouldCreateBucket
+                - !If [!Equals [!Ref KmsKeyId, ''], !Ref AWS::NoValue, !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${KmsKeyId}']
+                - !Ref AWS::NoValue
       
       # API Gateway event trigger
       # Creates a POST endpoint at /document

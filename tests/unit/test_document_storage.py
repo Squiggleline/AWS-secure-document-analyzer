@@ -2,9 +2,12 @@
 Unit tests for src/services/document_storage.py.
 """
 
+import datetime
+
 import pytest
 from botocore.exceptions import ClientError
 
+from services import document_storage
 from services.document_storage import (
     _build_metadata,
     _get_content_type,
@@ -34,6 +37,18 @@ class TestGetContentType:
     def test_no_extension_defaults_to_octet_stream(self):
         assert _get_content_type("noextension") == "application/octet-stream"
 
+    def test_empty_filename_defaults_to_octet_stream(self):
+        assert _get_content_type("") == "application/octet-stream"
+
+    def test_multiple_dots_uses_last_extension(self):
+        assert _get_content_type("archive.tar.pdf") == "application/pdf"
+
+    def test_hidden_file_without_extension_defaults_to_octet_stream(self):
+        assert _get_content_type(".gitignore") == "application/octet-stream"
+
+    def test_dot_at_end_defaults_to_octet_stream(self):
+        assert _get_content_type("weird.") == "application/octet-stream"
+
 
 class TestBuildMetadata:
     """Test cases for metadata builder."""
@@ -43,9 +58,20 @@ class TestBuildMetadata:
         assert "upload-timestamp" in metadata
         assert "T" in metadata["upload-timestamp"]
 
+    def test_metadata_timestamp_is_iso_8601_utc(self):
+        """Test that the upload timestamp is a valid ISO 8601 UTC string."""
+        metadata = _build_metadata("report.pdf")
+        timestamp = metadata["upload-timestamp"]
+        parsed = datetime.datetime.fromisoformat(timestamp)
+        assert parsed.tzinfo == datetime.timezone.utc
+
     def test_metadata_contains_original_filename(self):
         metadata = _build_metadata("report.pdf")
         assert metadata["original-filename"] == "report.pdf"
+
+    def test_metadata_contains_unicode_filename(self):
+        metadata = _build_metadata("résumé_文档.pdf")
+        assert metadata["original-filename"] == "résumé_文档.pdf"
 
 
 class TestStoreDocument:
@@ -104,6 +130,36 @@ class TestStoreDocument:
         call_kwargs = mock_s3_client.put_object.call_args.kwargs
         assert call_kwargs["Metadata"]["original-filename"] == "scan.tiff"
 
+    def test_store_document_original_filename_differs_from_key(self, mock_s3_client):
+        """Test that metadata uses original_filename when it differs from key."""
+        store_document(
+            "test-bucket",
+            "uuid-1234.pdf",
+            b"content",
+            original_filename="my-document.pdf",
+        )
+
+        call_kwargs = mock_s3_client.put_object.call_args.kwargs
+        assert call_kwargs["Key"] == "uuid-1234.pdf"
+        assert call_kwargs["Metadata"]["original-filename"] == "my-document.pdf"
+        assert call_kwargs["ContentType"] == "application/pdf"
+
+    def test_store_document_large_binary_body(self, mock_s3_client):
+        """Test storing a large (10MB) binary document body."""
+        large_content = b"\x00\x01\x02" * 3_500_000  # ~10.5 MB
+        store_document("test-bucket", "large.pdf", large_content)
+
+        call_kwargs = mock_s3_client.put_object.call_args.kwargs
+        assert call_kwargs["Body"] == large_content
+
+    def test_store_document_unicode_filename(self, mock_s3_client):
+        """Test that unicode filenames are handled correctly."""
+        store_document("test-bucket", "résumé.pdf", b"content")
+
+        call_kwargs = mock_s3_client.put_object.call_args.kwargs
+        assert call_kwargs["Key"] == "résumé.pdf"
+        assert call_kwargs["ContentType"] == "application/pdf"
+
     def test_store_document_client_error(self, mock_s3_client):
         """Test that ClientError propagates to the caller."""
         mock_s3_client.put_object.side_effect = ClientError(
@@ -121,6 +177,17 @@ class TestStoreDocument:
         mock_s3_client.put_object.assert_called_once()
         call_kwargs = mock_s3_client.put_object.call_args.kwargs
         assert call_kwargs["Body"] == b""
+
+
+class TestS3ClientNotInitialized:
+    """Test cases when the boto3 S3 client fails to initialize."""
+
+    def test_store_document_raises_runtime_error(self, monkeypatch):
+        """Test that store_document raises RuntimeError when s3_client is None."""
+        monkeypatch.setattr(document_storage, "s3_client", None)
+
+        with pytest.raises(RuntimeError, match="S3 client not initialized"):
+            store_document("test-bucket", "test.pdf", b"content")
 
 
 if __name__ == "__main__":

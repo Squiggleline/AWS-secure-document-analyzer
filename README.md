@@ -202,10 +202,12 @@ The mapping lives in `src/utils/errors.py` and every failure is logged with stru
 
 The Lambda execution role includes only the necessary permissions:
 
-- **S3** - GetObject, PutObject for the document bucket
-- **Textract** - DetectDocumentText for text extraction
-- **KMS** - Decrypt, Encrypt, GenerateDataKey for encryption
-- **CloudWatch** - Basic execution role for logging
+| Service | Actions | Resource | Notes |
+|---------|---------|----------|-------|
+| **S3** | `s3:PutObject`, `s3:GetObject` | Bucket ARN (`arn:...:s3:::bucket/*`) | Only write/read to the document bucket. `S3CrudPolicy` was replaced with explicit actions to avoid granting `DeleteObject`, `PutObjectAcl`, etc. |
+| **Textract** | `textract:DetectDocumentText` | `*` | Textract does not support resource-level permissions, so `*` is required. Only `DetectDocumentText` is granted (not `AnalyzeDocument`). |
+| **KMS** | `kms:Decrypt` | Bucket's KMS key ARN | Only `Decrypt` is needed — the Lambda reads KMS-encrypted objects from S3. `Encrypt` and `GenerateDataKey` were removed as the Lambda does not write KMS-encrypted data directly. |
+| **CloudWatch** | `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` | Log group ARN | Managed by SAM's `AWS::Serverless::Function` (AWSLambdaBasicExecutionRole). |
 
 ## S3 Bucket Protection
 
