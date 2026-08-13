@@ -17,6 +17,10 @@ confirm_changeset = false
 resolve_s3 = true
 region = "us-east-1"
 
+# Template parameters (matching template.yaml Parameters section)
+# These prevent interactive prompts during `sam deploy`.
+parameter_overrides = "CreateBucket=false DocumentBucketName=ai-security-uploads-2026 KmsKeyId= LogLevel=INFO MaxFileSizeBytes=10485760 CorsAllowedOrigin=*"
+
 [default.sync]
 [default.sync.parameters]
 watch = true
@@ -24,3 +28,7 @@ watch = true
 [default.local_start_api]
 [default.local_start_api.parameters]
 warm_containers = "EAGER"
+
+[default.local_invoke]
+[default.local_invoke.parameters]
+event = "events/document-upload-valid.json"
