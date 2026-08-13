@@ -161,10 +161,7 @@ Resources:
             - Effect: Allow
               Action:
                 - 'kms:Decrypt'
-              Resource: !If
-                - ShouldCreateBucket
-                - !If [!Equals [!Ref KmsKeyId, ''], !Ref AWS::NoValue, !Sub 'arn:${AWS::Partition}:kms:${AWS::Region}:${AWS::AccountId}:key/${KmsKeyId}']
-                - !Ref AWS::NoValue
+              Resource: !Ref KmsKeyArn
       
       # API Gateway event trigger
       # Creates a POST endpoint at /document
