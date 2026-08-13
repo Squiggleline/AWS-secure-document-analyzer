@@ -56,6 +56,11 @@ Parameters:
     Default: '10485760'
     Description: 'Maximum upload file size in bytes (default: 10 MB)'
 
+  CorsAllowedOrigin:
+    Type: String
+    Default: '*'
+    Description: 'CORS allowed origin for API Gateway (use * for all origins, or specify a domain like https://example.com)'
+
 Conditions:
   # Condition to check if we should create a new bucket
   ShouldCreateBucket: !Equals [!Ref CreateBucket, 'true']
@@ -125,6 +130,7 @@ Resources:
           BUCKET_NAME: !Ref DocumentBucketName
           LOG_LEVEL: !Ref LogLevel
           MAX_FILE_SIZE_BYTES: !Ref MaxFileSizeBytes
+          CORS_ALLOWED_ORIGIN: !Ref CorsAllowedOrigin
       
       # Least-privilege IAM policies
       # Each policy grants only the minimum required permissions
@@ -171,10 +177,15 @@ Resources:
       StageName: prod
       
       # CORS configuration for web clients
+      # AllowOrigin is configurable via the CorsAllowedOrigin parameter.
+      # AllowHeaders includes 'filename' (used by the upload endpoint) and
+      # all standard API Gateway headers.
       Cors:
-        AllowOrigin: "'*'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: !Sub "'${CorsAllowedOrigin}'"
+        AllowHeaders: "'Content-Type,filename,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowMethods: "'POST,OPTIONS'"
+        AllowCredentials: "'true'"
+        MaxAge: "'86400'"
 
 Outputs:
   # ============================================================================

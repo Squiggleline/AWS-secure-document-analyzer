@@ -15,9 +15,10 @@ SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-# Provide a deterministic BUCKET_NAME for tests. The Lambda code now requires
-# this environment variable (no hardcoded fallback); SAM sets it in production.
+# Provide deterministic environment variables for tests. The Lambda code
+# requires BUCKET_NAME (no hardcoded fallback); SAM sets it in production.
 os.environ.setdefault("BUCKET_NAME", "test-bucket")
+os.environ.setdefault("CORS_ALLOWED_ORIGIN", "*")
 
 
 @pytest.fixture

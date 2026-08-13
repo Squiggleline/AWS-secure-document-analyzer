@@ -177,11 +177,15 @@ class TestLambdaHandler:
         assert body["error"] == "Internal error"
 
     def test_response_has_cors_headers(self):
-        """Test that responses include CORS headers."""
+        """Test that responses include proper CORS headers."""
         result = app.lambda_handler({}, context=None)
 
         assert result["headers"]["Access-Control-Allow-Origin"] == "*"
         assert result["headers"]["Content-Type"] == "application/json"
+        assert result["headers"]["Access-Control-Allow-Methods"] == "POST,OPTIONS"
+        assert "filename" in result["headers"]["Access-Control-Allow-Headers"]
+        assert result["headers"]["Access-Control-Max-Age"] == "86400"
+        assert result["headers"]["Vary"] == "Origin"
 
 
 if __name__ == "__main__":

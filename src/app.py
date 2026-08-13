@@ -28,9 +28,15 @@ logger = get_logger()
 
 BUCKET_NAME = os.environ["BUCKET_NAME"]
 
+CORS_ALLOWED_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "*")
+
 CORS_HEADERS = {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",  # CORS for web clients
+    "Access-Control-Allow-Origin": CORS_ALLOWED_ORIGIN,
+    "Access-Control-Allow-Methods": "POST,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,filename,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+    "Access-Control-Max-Age": "86400",
+    "Vary": "Origin",
 }
 
 
