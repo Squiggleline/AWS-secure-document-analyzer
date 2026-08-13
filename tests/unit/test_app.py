@@ -39,7 +39,9 @@ class TestLambdaHandler:
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["filename"] == "report.pdf"
-        assert body["extracted_text"] == "Hello World\nThis is a test"
+        assert body["status"] == "success"
+        assert "processingTime" in body
+        assert body["text"] == "Hello World\nThis is a test"
         assert body["lines"] == [
             {"text": "Hello World", "confidence": 99.5},
             {"text": "This is a test", "confidence": 98.2},
@@ -64,7 +66,9 @@ class TestLambdaHandler:
         assert result["statusCode"] == 200
         body = json.loads(result["body"])
         assert body["filename"] == "uploaded_document.pdf"
-        assert body["extracted_text"] == "Content"
+        assert body["status"] == "success"
+        assert "processingTime" in body
+        assert body["text"] == "Content"
         assert body["lines"] == [{"text": "Content", "confidence": 95.0}]
         mock_store.assert_called_once_with(
             app.BUCKET_NAME,
@@ -79,6 +83,7 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == 400
         body = json.loads(result["body"])
+        assert body["status"] == "error"
         assert "No file provided" in body["message"]
 
     def test_invalid_base64_returns_400(self):

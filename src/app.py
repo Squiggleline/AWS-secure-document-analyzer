@@ -14,6 +14,7 @@ Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Response
 
 import json
 import os
+import time
 
 from botocore.exceptions import ClientError
 
@@ -53,6 +54,8 @@ def lambda_handler(event: dict, context=None) -> dict:
     Returns:
         dict: API Gateway response with extracted text or an error message.
     """
+    start_time = time.perf_counter()
+
     try:
         request = parse_upload_event(event)
 
@@ -76,19 +79,31 @@ def lambda_handler(event: dict, context=None) -> dict:
         extracted_lines = extract_lines(BUCKET_NAME, request.filename)
         extracted_text = "\n".join(line["text"] for line in extracted_lines)
 
+        processing_time = time.perf_counter() - start_time
+
         return _json_response(
             200,
             {
-                "message": "Document processed successfully",
                 "filename": request.filename,
-                "extracted_text": extracted_text,
+                "status": "success",
+                "processingTime": f"{processing_time:.3f}s",
+                "text": extracted_text,
                 "lines": extracted_lines,
             },
         )
 
     except InvalidRequestError as e:
         logger.warning("Invalid request", extra={"reason": str(e)})
-        return _json_response(400, {"error": str(e), "message": str(e)})
+        return _json_response(
+            400,
+            {
+                "filename": None,
+                "status": "error",
+                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
+                "error": str(e),
+                "message": str(e),
+            },
+        )
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -104,7 +119,13 @@ def lambda_handler(event: dict, context=None) -> dict:
         )
         return _json_response(
             status_code,
-            {"error": f"AWS Error: {error_code}", "message": error_message},
+            {
+                "filename": None,
+                "status": "error",
+                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
+                "error": f"AWS Error: {error_code}",
+                "message": error_message,
+            },
         )
 
     except Exception as e:  # noqa: BLE001 - last-resort guard for the handler
@@ -112,7 +133,16 @@ def lambda_handler(event: dict, context=None) -> dict:
             "Unexpected error",
             extra={"error_type": type(e).__name__, "error_message": str(e)},
         )
-        return _json_response(500, {"error": "Internal error", "message": str(e)})
+        return _json_response(
+            500,
+            {
+                "filename": None,
+                "status": "error",
+                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
+                "error": "Internal error",
+                "message": str(e),
+            },
+        )
 
 
 # For local testing
