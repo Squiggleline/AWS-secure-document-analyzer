@@ -49,6 +49,45 @@ def _json_response(status_code: int, body: dict) -> dict:
     }
 
 
+def _error_response(
+    status_code: int,
+    error_code: str,
+    message: str,
+    start_time: float,
+    filename: str | None = None,
+) -> dict:
+    """
+    Build a consistent error response.
+
+    All error responses share the same structure:
+    - ``filename``: the document filename (or None if not yet known)
+    - ``status``: always ``"error"``
+    - ``processingTime``: elapsed time since ``start_time``
+    - ``error``: a short error code (e.g. ``"InvalidRequest"``, ``"AccessDenied"``)
+    - ``message``: a human-readable error description
+
+    Parameters:
+        status_code (int): HTTP status code.
+        error_code (str): Short error code for programmatic handling.
+        message (str): Human-readable error description.
+        start_time (float): ``time.perf_counter()`` value from handler start.
+        filename (str, optional): The document filename, if known.
+
+    Returns:
+        dict: API Gateway response with a consistent error body.
+    """
+    return _json_response(
+        status_code,
+        {
+            "filename": filename,
+            "status": "error",
+            "processingTime": f"{time.perf_counter() - start_time:.3f}s",
+            "error": error_code,
+            "message": message,
+        },
+    )
+
+
 def lambda_handler(event: dict, context=None) -> dict:
     """
     Main Lambda handler function.
@@ -100,16 +139,7 @@ def lambda_handler(event: dict, context=None) -> dict:
 
     except InvalidRequestError as e:
         logger.warning("Invalid request", extra={"reason": str(e)})
-        return _json_response(
-            400,
-            {
-                "filename": None,
-                "status": "error",
-                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
-                "error": str(e),
-                "message": str(e),
-            },
-        )
+        return _error_response(400, "InvalidRequest", str(e), start_time)
 
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -123,32 +153,14 @@ def lambda_handler(event: dict, context=None) -> dict:
                 "http_status": status_code,
             },
         )
-        return _json_response(
-            status_code,
-            {
-                "filename": None,
-                "status": "error",
-                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
-                "error": f"AWS Error: {error_code}",
-                "message": error_message,
-            },
-        )
+        return _error_response(status_code, error_code, error_message, start_time)
 
     except Exception as e:  # noqa: BLE001 - last-resort guard for the handler
         logger.error(
             "Unexpected error",
             extra={"error_type": type(e).__name__, "error_message": str(e)},
         )
-        return _json_response(
-            500,
-            {
-                "filename": None,
-                "status": "error",
-                "processingTime": f"{time.perf_counter() - start_time:.3f}s",
-                "error": "Internal error",
-                "message": str(e),
-            },
-        )
+        return _error_response(500, "InternalError", str(e), start_time)
 
 
 # For local testing

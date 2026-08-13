@@ -84,7 +84,10 @@ class TestLambdaHandler:
         assert result["statusCode"] == 400
         body = json.loads(result["body"])
         assert body["status"] == "error"
+        assert body["error"] == "InvalidRequest"
         assert "No file provided" in body["message"]
+        assert "processingTime" in body
+        assert body["filename"] is None
 
     def test_invalid_base64_returns_400(self):
         """Test that a malformed base64 body returns 400."""
@@ -118,7 +121,10 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == expected_status
         body = json.loads(result["body"])
-        assert f"AWS Error: {error_code}" in body["error"]
+        assert body["error"] == error_code
+        assert body["status"] == "error"
+        assert "processingTime" in body
+        assert body["filename"] is None
 
     @patch("app.store_document")
     def test_client_error_returns_message(self, mock_store):
@@ -147,7 +153,8 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == 422
         body = json.loads(result["body"])
-        assert "BadDocumentException" in body["error"]
+        assert body["error"] == "BadDocumentException"
+        assert body["status"] == "error"
 
     @patch("app.extract_lines")
     @patch("app.store_document")
@@ -162,7 +169,8 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == 415
         body = json.loads(result["body"])
-        assert "UnsupportedDocumentException" in body["error"]
+        assert body["error"] == "UnsupportedDocumentException"
+        assert body["status"] == "error"
 
     @patch("app.extract_lines")
     @patch("app.store_document")
@@ -174,7 +182,9 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == 500
         body = json.loads(result["body"])
-        assert body["error"] == "Internal error"
+        assert body["error"] == "InternalError"
+        assert body["status"] == "error"
+        assert "processingTime" in body
 
     def test_response_has_cors_headers(self):
         """Test that responses include proper CORS headers."""
