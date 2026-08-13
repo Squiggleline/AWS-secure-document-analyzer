@@ -36,10 +36,9 @@ Parameters:
     Default: 'ai-security-uploads-2026'
     Description: 'Name of the S3 bucket for document storage'
   
-  KmsKeyId:
-    Type: String
-    Default: ''
-    Description: 'Optional KMS key ID for bucket encryption (leave empty for default)'
+KmsKeyArn:
+  Type: String
+  Description: 'ARN of the KMS key used to encrypt the existing document bucket'
   
   LogLevel:
     Type: String
