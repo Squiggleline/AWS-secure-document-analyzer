@@ -136,15 +136,40 @@ make test
 ### Invoke Locally with SAM
 
 ```bash
-# Valid upload event
-sam local invoke --event events/document-upload-valid.json
+# Build + invoke with the valid upload event (expects 200)
+make local-invoke
 
-# Missing body event (expects a 400 response)
-sam local invoke --event events/document-upload-missing-body.json
+# Build + invoke with the missing-body event (expects 400)
+make local-invoke-err
 
-# Start the API locally
-sam local start-api
+# Build + start the API Gateway locally at http://localhost:3000
+make local-api
+# or: make local
 ```
+
+Or use the cross-platform scripts:
+
+```bash
+# Bash
+./scripts/local.sh            # Build + invoke valid event
+./scripts/local.sh --all      # Build + invoke all sample events
+./scripts/local.sh --api      # Build + start API locally
+
+# PowerShell
+.\scripts\local.ps1           # Build + invoke valid event
+.\scripts\local.ps1 -All      # Build + invoke all sample events
+.\scripts\local.ps1 -Api      # Build + start API locally
+```
+
+### Sample Events
+
+The `events/` directory contains realistic API Gateway proxy events for local testing:
+
+| Event | Description | Expected Status |
+|-------|-------------|-----------------|
+| `document-upload-valid.json` | Valid base64 PDF upload with `filename` header | `200` |
+| `document-upload-missing-body.json` | No `body` in the event | `400` |
+| `document-upload-invalid-base64.json` | Malformed base64 body | `400` |
 
 ### Manual Scripts
 
@@ -154,10 +179,12 @@ For environments without `make`:
 # Bash
 ./scripts/test.sh
 ./scripts/deploy.sh
+./scripts/local.sh
 
 # PowerShell
 .\scripts\test.ps1
 .\scripts\deploy.ps1
+.\scripts\local.ps1
 ```
 
 ## Code Layout

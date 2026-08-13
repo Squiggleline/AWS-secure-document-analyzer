@@ -3,12 +3,14 @@
   "path": "/document",
   "httpMethod": "POST",
   "headers": {
-    "Content-Type": "application/json",
+    "Content-Type": "application/octet-stream",
+    "filename": "sample.pdf",
     "User-Agent": "curl/8.0.1",
     "Accept": "*/*"
   },
   "multiValueHeaders": {
-    "Content-Type": ["application/json"],
+    "Content-Type": ["application/octet-stream"],
+    "filename": ["sample.pdf"],
     "User-Agent": ["curl/8.0.1"],
     "Accept": ["*/*"]
   },
@@ -20,7 +22,7 @@
     "resourceId": "abc123",
     "resourcePath": "/document",
     "httpMethod": "POST",
-    "requestId": "sam-local-request-002",
+    "requestId": "sam-local-request-003",
     "accountId": "123456789012",
     "identity": {
       "sourceIp": "203.0.113.1",
@@ -29,6 +31,6 @@
     "stage": "prod",
     "apiId": "api123"
   },
-  "body": null,
-  "isBase64Encoded": false
+  "body": "!!!not-valid-base64!!!",
+  "isBase64Encoded": true
 }

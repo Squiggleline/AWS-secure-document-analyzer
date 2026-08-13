@@ -1,7 +1,36 @@
 {
-  "body": "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IGRvY3VtZW50Lg==",
+  "resource": "/document",
+  "path": "/document",
+  "httpMethod": "POST",
   "headers": {
-    "Content-Type": "application/json",
-    "filename": "sample.pdf"
-  }
+    "Content-Type": "application/octet-stream",
+    "filename": "sample.pdf",
+    "User-Agent": "curl/8.0.1",
+    "Accept": "*/*"
+  },
+  "multiValueHeaders": {
+    "Content-Type": ["application/octet-stream"],
+    "filename": ["sample.pdf"],
+    "User-Agent": ["curl/8.0.1"],
+    "Accept": ["*/*"]
+  },
+  "queryStringParameters": null,
+  "multiValueQueryStringParameters": null,
+  "pathParameters": null,
+  "stageVariables": null,
+  "requestContext": {
+    "resourceId": "abc123",
+    "resourcePath": "/document",
+    "httpMethod": "POST",
+    "requestId": "sam-local-request-001",
+    "accountId": "123456789012",
+    "identity": {
+      "sourceIp": "203.0.113.1",
+      "userAgent": "curl/8.0.1"
+    },
+    "stage": "prod",
+    "apiId": "api123"
+  },
+  "body": "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IGRvY3VtZW50Lg==",
+  "isBase64Encoded": true
 }
