@@ -37,3 +37,40 @@ def mock_textract_client():
 
     with patch("services.text_extraction.textract_client") as mock:
         yield mock
+
+
+@pytest.fixture
+def textract_response():
+    """
+    Build a realistic Textract DetectDocumentText response.
+
+    Simulates the block structure Textract returns for a scanned document:
+    one PAGE block, two LINE blocks, and three WORD blocks (one of which
+    is a child of the first LINE and two of which are children of the
+    second LINE).
+    """
+    return {
+        "DocumentMetadata": {"Pages": 1},
+        "Blocks": [
+            {"BlockType": "PAGE", "Page": 1},
+            {
+                "BlockType": "LINE",
+                "Id": "line-1",
+                "Page": 1,
+                "Text": "Hello World",
+                "Confidence": 99.5,
+                "Geometry": {"BoundingBox": {"Left": 0.1, "Top": 0.1}},
+            },
+            {
+                "BlockType": "LINE",
+                "Id": "line-2",
+                "Page": 1,
+                "Text": "This is a test document",
+                "Confidence": 98.2,
+                "Geometry": {"BoundingBox": {"Left": 0.1, "Top": 0.2}},
+            },
+            {"BlockType": "WORD", "Id": "word-1", "Page": 1, "Text": "Hello", "Confidence": 99.8},
+            {"BlockType": "WORD", "Id": "word-2", "Page": 1, "Text": "World", "Confidence": 99.2},
+            {"BlockType": "WORD", "Id": "word-3", "Page": 1, "Text": "test", "Confidence": 97.9},
+        ],
+    }

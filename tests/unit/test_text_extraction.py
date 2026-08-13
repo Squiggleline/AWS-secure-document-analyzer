@@ -5,6 +5,7 @@ Unit tests for src/services/text_extraction.py.
 import pytest
 from botocore.exceptions import ClientError
 
+from services import text_extraction
 from services.text_extraction import extract_lines, extract_text, parse_text_blocks
 
 
@@ -22,6 +23,28 @@ class TestExtractText:
         )
         mock_textract_client.analyze_document.assert_not_called()
         assert result == {"Blocks": []}
+
+    def test_extract_text_uses_s3_document(self, mock_textract_client, textract_response):
+        """Test that the S3 document reference is passed correctly."""
+        mock_textract_client.detect_document_text.return_value = textract_response
+
+        extract_text("my-bucket", "my-document.pdf")
+
+        mock_textract_client.detect_document_text.assert_called_once_with(
+            Document={
+                "S3Object": {"Bucket": "my-bucket", "Name": "my-document.pdf"}
+            }
+        )
+
+    def test_extract_text_returns_full_response(
+        self, mock_textract_client, textract_response
+    ):
+        """Test that the full Textract response is returned unchanged."""
+        mock_textract_client.detect_document_text.return_value = textract_response
+
+        result = extract_text("test-bucket", "test.pdf")
+
+        assert result == textract_response
 
     def test_extract_text_with_features(self, mock_textract_client):
         """Test analyze_document path with feature types."""
@@ -47,6 +70,18 @@ class TestExtractText:
 
         with pytest.raises(ClientError):
             extract_text("test-bucket", "invalid.txt")
+
+    def test_extract_text_analyze_client_error(self, mock_textract_client):
+        """Test that ClientError from analyze_document propagates."""
+        mock_textract_client.analyze_document.side_effect = ClientError(
+            {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}},
+            "AnalyzeDocument",
+        )
+
+        with pytest.raises(ClientError):
+            extract_text(
+                "test-bucket", "test.pdf", feature_types=["TABLES"]
+            )
 
 
 class TestParseTextBlocks:
@@ -129,6 +164,15 @@ class TestParseTextBlocks:
 
         assert result[0]["confidence"] == 0.0
 
+    def test_parse_realistic_response(self, textract_response):
+        """Test parsing a realistic Textract response with mixed blocks."""
+        result = parse_text_blocks(textract_response)
+
+        assert result == [
+            {"text": "Hello World", "confidence": 99.5},
+            {"text": "This is a test document", "confidence": 98.2},
+        ]
+
 
 class TestExtractLines:
     """Test cases for the extract_lines helper."""
@@ -171,6 +215,50 @@ class TestExtractLines:
         result = extract_lines("test-bucket", "test.pdf")
 
         assert result == [{"text": "Only one line", "confidence": 95.0}]
+
+    def test_extract_lines_uses_realistic_response(
+        self, mock_textract_client, textract_response
+    ):
+        """Test end-to-end extract_lines with a realistic Textract response."""
+        mock_textract_client.detect_document_text.return_value = textract_response
+
+        result = extract_lines("test-bucket", "test.pdf")
+
+        assert result == [
+            {"text": "Hello World", "confidence": 99.5},
+            {"text": "This is a test document", "confidence": 98.2},
+        ]
+        mock_textract_client.detect_document_text.assert_called_once_with(
+            Document={"S3Object": {"Bucket": "test-bucket", "Name": "test.pdf"}}
+        )
+
+    def test_extract_lines_passes_document_to_textract(self, mock_textract_client):
+        """Test that the correct Document payload is sent to Textract."""
+        mock_textract_client.detect_document_text.return_value = {"Blocks": []}
+
+        extract_lines("my-bucket", "my-doc.pdf")
+
+        mock_textract_client.detect_document_text.assert_called_once_with(
+            Document={"S3Object": {"Bucket": "my-bucket", "Name": "my-doc.pdf"}}
+        )
+
+
+class TestTextractClientNotInitialized:
+    """Test cases when the boto3 Textract client fails to initialize."""
+
+    def test_extract_text_raises_runtime_error(self, monkeypatch):
+        """Test that extract_text raises RuntimeError when textract_client is None."""
+        monkeypatch.setattr(text_extraction, "textract_client", None)
+
+        with pytest.raises(RuntimeError, match="Textract client not initialized"):
+            extract_text("test-bucket", "test.pdf")
+
+    def test_extract_lines_raises_runtime_error(self, monkeypatch):
+        """Test that extract_lines raises RuntimeError when textract_client is None."""
+        monkeypatch.setattr(text_extraction, "textract_client", None)
+
+        with pytest.raises(RuntimeError, match="Textract client not initialized"):
+            extract_lines("test-bucket", "test.pdf")
 
 
 if __name__ == "__main__":
