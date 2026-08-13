@@ -103,6 +103,7 @@ The first deployment will prompt for parameters. Subsequent deployments use `sam
 | `KmsKeyId` | KMS key ID for encryption (optional) | (empty) |
 | `LogLevel` | Logging level for the Lambda function | `INFO` |
 | `MaxFileSizeBytes` | Maximum upload file size in bytes | `10485760` (10 MB) |
+| `CorsAllowedOrigin` | CORS allowed origin for API Gateway | `*` |
 
 ### 3. Test the API
 
@@ -240,6 +241,7 @@ All configuration is injected by SAM via the template (`Environment.Variables`) 
 | `BUCKET_NAME` | S3 bucket for document storage | Set by SAM from the `DocumentBucketName` parameter (**required** — no fallback) |
 | `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | Set by SAM from the `LogLevel` parameter |
 | `MAX_FILE_SIZE_BYTES` | Maximum upload file size in bytes | Set by SAM from the `MaxFileSizeBytes` parameter (default: 10 MB) |
+| `CORS_ALLOWED_ORIGIN` | CORS allowed origin for API responses | Set by SAM from the `CorsAllowedOrigin` parameter (default: `*`) |
 
 ## License
 
