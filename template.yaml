@@ -7,7 +7,7 @@ Description: |
   # - Lambda function for document processing
   # - API Gateway for REST endpoints
   # - IAM roles with least-privilege permissions
-  # - Optional: S3 bucket with KMS encryption
+  # - S3 bucket with KMS encryption (KMS key managed by this template)
   #
   # Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return text
 
@@ -25,7 +25,7 @@ Parameters:
   # Option 2: Create a new bucket with KMS encryption (set CreateBucket=true)
   CreateBucket:
     Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
@@ -36,14 +36,9 @@ Parameters:
     Default: 'ai-security-uploads-2026'
     Description: 'Name of the S3 bucket for document storage'
   
-  KmsKeyId:
-    Type: String
-    Default: ''
-    Description: 'Optional KMS key ID for bucket encryption (leave empty for default)'
-
-  KmsKeyArn:
-    Type: String
-    Description: 'ARN of the KMS key used to encrypt the document bucket'
+  # Note: A KMS key and alias are created automatically by this template
+  # (see the DocumentKMSKey and DocumentKMSAlias resources below).
+  # The KmsKeyArn parameter is no longer needed.
   
   LogLevel:
     Type: String
@@ -71,6 +66,53 @@ Conditions:
 
 Resources:
   # ============================================================================
+  # KMS Key and Alias (for S3 bucket encryption)
+  # ============================================================================
+  # A dedicated KMS key and alias are created to encrypt objects stored in
+  # the document bucket. The key has:
+  #   - Auto-rotation enabled (security best practice)
+  #   - A key policy granting S3 permission to encrypt/decrypt objects and
+  #     Lambda permission to decrypt for processing.
+  # - The root account retains full administrative access to the key.
+
+  DocumentKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting Secure Document Analyzer document bucket
+      EnableKeyRotation: true
+      KeyPolicy:
+        # Allow the account root user to manage the key
+        - Sid: Allow administration of the key
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        # Allow S3 to encrypt/decrypt objects in the document bucket
+        - Sid: Allow S3 to use the key for bucket encryption
+          Effect: Allow
+          Principal:
+            Service: s3.amazonaws.com
+          Action:
+            - 'kms:GenerateDataKey'
+            - 'kms:Decrypt'
+          Resource: '*'
+        # Allow Lambda to decrypt objects when processing documents
+        - Sid: Allow Lambda to decrypt objects
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            - 'kms:Decrypt'
+          Resource: '*'
+
+  DocumentKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: 'alias/secure-document-analyzer'
+      TargetKeyId: !Ref DocumentKMSKey
+
+  # ============================================================================
   # S3 Bucket (Optional - for new deployments)
   # ============================================================================
   # Creates a new S3 bucket with KMS encryption if CreateBucket=true
@@ -80,12 +122,12 @@ Resources:
     Condition: ShouldCreateBucket
     Properties:
       BucketName: !Ref DocumentBucketName
-      # Enable server-side encryption with KMS
+      # Enable server-side encryption with the template-managed KMS key
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
               SSEAlgorithm: 'aws:kms'
-              KMSMasterKeyID: !If [!Equals [!Ref KmsKeyId, ''], !Ref AWS::NoValue, !Ref KmsKeyId]
+              KMSMasterKeyID: !Ref DocumentKMSKey
       # Block public access for security
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -166,7 +208,7 @@ Resources:
             - Effect: Allow
               Action:
                 - 'kms:Decrypt'
-              Resource: !Ref KmsKeyArn
+              Resource: !Ref DocumentKMSKey
       
       # API Gateway event trigger
       # Creates a POST endpoint at /document
@@ -215,3 +257,6 @@ Outputs:
   DocumentBucket:
     Description: 'S3 bucket for document storage'
     Value: !If [ShouldCreateBucket, !Ref DocumentBucketName, !Ref DocumentBucketName]
+  KmsKeyArn:
+    Description: 'ARN of the KMS key used for bucket encryption'
+    Value: !GetAtt DocumentKMSKey.Arn
