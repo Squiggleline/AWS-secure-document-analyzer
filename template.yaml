@@ -34,7 +34,7 @@ Parameters:
   DocumentBucketName:
     Type: String
     Default: 'ai-security-uploads-2026'
-    Description: 'Name of the S3 bucket for document storage'
+    Description: 'Name of an existing S3 bucket (only used when CreateBucket=false)'
   
   # Note: A KMS key and alias are created automatically by this template
   # (see the DocumentKMSKey and DocumentKMSAlias resources below).
@@ -121,7 +121,6 @@ Resources:
     Type: AWS::S3::Bucket
     Condition: ShouldCreateBucket
     Properties:
-      BucketName: !Ref DocumentBucketName
       # Enable server-side encryption with the template-managed KMS key
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -173,7 +172,7 @@ Resources:
       # All configuration is externalized for flexibility
       Environment:
         Variables:
-          BUCKET_NAME: !Ref DocumentBucketName
+          BUCKET_NAME: !If [ShouldCreateBucket, !Ref DocumentBucket, !Ref DocumentBucketName]
           LOG_LEVEL: !Ref LogLevel
           MAX_FILE_SIZE_BYTES: !Ref MaxFileSizeBytes
           CORS_ALLOWED_ORIGIN: !Ref CorsAllowedOrigin
@@ -189,7 +188,7 @@ Resources:
               Action:
                 - 's3:PutObject'
                 - 's3:GetObject'
-              Resource: !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}/*'
+              Resource: !If [ShouldCreateBucket, !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucket}/*', !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}/*']
 
         # Textract - Only detect document text (not full analyze).
         # Textract does not support resource-level permissions, so '*' is
@@ -256,7 +255,7 @@ Outputs:
   
   DocumentBucket:
     Description: 'S3 bucket for document storage'
-    Value: !If [ShouldCreateBucket, !Ref DocumentBucketName, !Ref DocumentBucketName]
+    Value: !If [ShouldCreateBucket, !Ref DocumentBucket, !Ref DocumentBucketName]
   KmsKeyArn:
     Description: 'ARN of the KMS key used for bucket encryption'
     Value: !GetAtt DocumentKMSKey.Arn
