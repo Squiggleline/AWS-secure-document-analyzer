@@ -71,8 +71,8 @@ Resources:
   # A dedicated KMS key and alias are created to encrypt objects stored in
   # the document bucket. The key has:
   #   - Auto-rotation enabled (security best practice)
-  #   - A key policy granting S3 permission to encrypt/decrypt objects and
-  #     Lambda permission to decrypt for processing.
+  #   - A key policy granting S3 and Lambda permission to use the key,
+  #     scoped to only this project's bucket and Lambda function.
   # - The root account retains full administrative access to the key.
 
   DocumentKMSKey:
@@ -97,6 +97,10 @@ Resources:
             - 'kms:GenerateDataKey'
             - 'kms:Decrypt'
           Resource: '*'
+          # Restrict to only this project's S3 bucket
+          Condition:
+            ArnEquals:
+              'aws:PrincipalArn': !If [ShouldCreateBucket, !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucket}', !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}']
         # Allow Lambda to decrypt objects when processing documents
         - Sid: Allow Lambda to decrypt objects
           Effect: Allow
@@ -105,6 +109,10 @@ Resources:
           Action:
             - 'kms:Decrypt'
           Resource: '*'
+          # Restrict to only this project's Lambda function
+          Condition:
+            ArnEquals:
+              'aws:PrincipalArn': !GetAtt DocumentAnalyzerFunction.Arn
 
   DocumentKMSAlias:
     Type: AWS::KMS::Alias
