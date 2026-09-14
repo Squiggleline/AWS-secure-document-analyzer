@@ -19,9 +19,9 @@ region = "us-east-1"
 
 # Template parameters (matching template.yaml Parameters section)
 # These prevent interactive prompts during `sam deploy`.
-# DocumentBucketName is no longer passed - the bucket name is auto-generated
-# by CloudFormation when CreateBucket=true. KmsKeyArn is output by the stack.
-parameter_overrides = "CreateBucket=true LogLevel=INFO MaxFileSizeBytes=10485760 CorsAllowedOrigin=*"
+# No CreateBucket, DocumentBucketName, KmsKeyId, or KmsKeyArn params remain -
+# documents are processed in-memory via Textract Bytes API, no S3/KMS needed.
+parameter_overrides = "LogLevel=INFO MaxFileSizeBytes=10485760 CorsAllowedOrigin=*"
 
 [default.sync]
 [default.sync.parameters]

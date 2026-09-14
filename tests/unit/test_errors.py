@@ -16,6 +16,7 @@ class TestHttpStatusForAwsError:
     def test_invalid_parameter_maps_to_400(self):
         assert http_status_for_aws_error("InvalidParameter") == 400
         assert http_status_for_aws_error("InvalidS3ObjectException") == 400
+        assert http_status_for_aws_error("InvalidParameterException") == 400
 
     def test_entity_too_large_maps_to_413(self):
         assert http_status_for_aws_error("EntityTooLarge") == 413
@@ -28,8 +29,8 @@ class TestHttpStatusForAwsError:
         assert http_status_for_aws_error("BadDocumentException") == 422
 
     def test_not_found_maps_to_404(self):
-        assert http_status_for_aws_error("NoSuchBucket") == 404
-        assert http_status_for_aws_error("NoSuchKey") == 404
+        assert http_status_for_aws_error("NotFoundException") == 404
+        assert http_status_for_aws_error("ResourceNotFoundException") == 404
 
     def test_throttling_maps_to_429(self):
         assert http_status_for_aws_error("Throttling") == 429

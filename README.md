@@ -5,7 +5,7 @@ A serverless document processing application built with AWS SAM that extracts te
 ## Architecture
 
 ```
-User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return extracted text
+User Upload -> API Gateway -> Lambda -> Textract -> Return extracted text
 ```
 
 ### Components
@@ -14,8 +14,9 @@ User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return extracted text
 |-----------|---------|
 | **API Gateway** | REST API endpoint for document uploads |
 | **Lambda** | Serverless compute for document processing |
-| **S3** | Secure document storage (KMS encrypted) |
 | **Textract** | Text extraction from PDF, PNG, JPG, TIFF |
+
+Documents are passed directly as raw bytes to Textract — no S3 bucket or KMS key is needed, which simplifies the infrastructure and minimizes attack surface.
 
 ## Project Structure
 
@@ -30,7 +31,6 @@ secure-document-analyzer/
 │   ├── requirements.txt             # Runtime dependencies (deployed to Lambda)
 │   ├── services/
 │   │   ├── __init__.py
-│   │   ├── document_storage.py      # S3 storage operations
 │   │   └── text_extraction.py       # Textract text extraction
 │   └── utils/
 │       ├── __init__.py
@@ -45,7 +45,6 @@ secure-document-analyzer/
 │   └── unit/
 │       ├── __init__.py
 │       ├── test_app.py              # Handler tests
-│       ├── test_document_storage.py # S3 service tests
 │       └── test_text_extraction.py  # Textract service tests
 ├── scripts/                         # Cross-platform automation
 │   ├── deploy.sh                    # Bash deployment
@@ -58,16 +57,15 @@ secure-document-analyzer/
 ├── docs/
 │   ├── architecture.md              # Architecture documentation
 │   └── deployment.md                # Deployment guide
-├── frontend/                        # Web client (if applicable)
 └── .gitignore
 ```
 
 ## Features
 
 - ✅ **Serverless** - No servers to manage, scales automatically
-- ✅ **Secure** - KMS encryption for document storage
 - ✅ **Fast** - Text extraction in seconds
-- ✅ **Cost-effective** - Pay only for what you use
+- ✅ **Secure** - Least-privilege IAM with Textract only (no S3/KMS needed)
+- ✅ **Cost-effective** - Pay only for what you use (no storage costs)
 - ✅ **Portfolio-ready** - Well-documented, production-ready code
 
 ## Prerequisites
@@ -89,26 +87,14 @@ make build
 
 ```bash
 make deploy
-# or: sam deploy --guided
+# or: sam deploy --config-env default
 ```
 
 The first deployment will prompt for parameters. Subsequent deployments use `samconfig.toml` defaults.
 
-#### Deployment Parameters
-
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `CreateBucket` | Create new S3 bucket (true) or use existing (false) | `false` |
-| `DocumentBucketName` | S3 bucket name for document storage | `ai-security-uploads-2026` |
-| `KmsKeyId` | KMS key ID for encryption (optional) | (empty) |
-| `LogLevel` | Logging level for the Lambda function | `INFO` |
-| `MaxFileSizeBytes` | Maximum upload file size in bytes | `10485760` (10 MB) |
-| `CorsAllowedOrigin` | CORS allowed origin for API Gateway | `*` |
-
 ### 3. Test the API
 
 After deployment, you'll get an API URL. Test with curl:
-
 ```bash
 curl -X POST https://<api-id>.execute-api.<region>.amazonaws.com/prod/document \
   -H "Content-Type: application/json" \
@@ -116,136 +102,26 @@ curl -X POST https://<api-id>.execute-api.<region>.amazonaws.com/prod/document \
   --data-binary @test.pdf
 ```
 
-## Local Development
+## Development
 
-### Install Dev Dependencies
-
+### Run Unit Tests
 ```bash
-pip install -r requirements-dev.txt
+python -m pytest
+# or: make test
 ```
 
-This installs pytest plus the runtime dependencies (boto3) needed to run the test suite locally.
-
-### Run Tests
-
+### Invoke Locally
 ```bash
-make test
-# or: python -m pytest
+sam local invoke --event events/document-upload-valid.json
 ```
 
-### Invoke Locally with SAM
+## Deployment Parameters
 
-```bash
-# Build + invoke with the valid upload event (expects 200)
-make local-invoke
-
-# Build + invoke with the missing-body event (expects 400)
-make local-invoke-err
-
-# Build + start the API Gateway locally at http://localhost:3000
-make local-api
-# or: make local
-```
-
-Or use the cross-platform scripts:
-
-```bash
-# Bash
-./scripts/local.sh            # Build + invoke valid event
-./scripts/local.sh --all      # Build + invoke all sample events
-./scripts/local.sh --api      # Build + start API locally
-
-# PowerShell
-.\scripts\local.ps1           # Build + invoke valid event
-.\scripts\local.ps1 -All      # Build + invoke all sample events
-.\scripts\local.ps1 -Api      # Build + start API locally
-```
-
-### Sample Events
-
-The `events/` directory contains realistic API Gateway proxy events for local testing:
-
-| Event | Description | Expected Status |
-|-------|-------------|-----------------|
-| `document-upload-valid.json` | Valid base64 PDF upload with `filename` header | `200` |
-| `document-upload-missing-body.json` | No `body` in the event | `400` |
-| `document-upload-invalid-base64.json` | Malformed base64 body | `400` |
-
-### Manual Scripts
-
-For environments without `make`:
-
-```bash
-# Bash
-./scripts/test.sh
-./scripts/deploy.sh
-./scripts/local.sh
-
-# PowerShell
-.\scripts\test.ps1
-.\scripts\deploy.ps1
-.\scripts\local.ps1
-```
-
-## Code Layout
-
-Thin handler design keeps `app.py` focused on orchestration:
-
-```
-API Gateway event
-    │
-    ▼
-app.lambda_handler ──► utils/validators.parse_upload_event
-    │
-    ├──► services/document_storage.store_document  (S3)
-    └──► services/text_extraction.extract_lines    (Textract)
-```
-
-- **`app.py`** - Parses the event, orchestrates the workflow, builds the response.
-- **`services/`** - Reusable business logic (S3 storage, Textract extraction).
-- **`utils/`** - Cross-cutting helpers (logging, validation, AWS error-to-HTTP mapping).
-- **`tests/unit/`** - Tests for the deployed Lambda code, using pytest fixtures to mock AWS clients.
-
-## Error Handling
-
-The handler returns meaningful HTTP status codes for different failure categories:
-
-| Status | Scenario |
-|--------|----------|
-| `400` | Missing/invalid request body, invalid base64, `InvalidParameter`, `InvalidS3ObjectException` |
-| `403` | `AccessDenied` / authorization failures |
-| `404` | `NoSuchBucket`, `NoSuchKey`, `ResourceNotFoundException` |
-| `409` | `BucketAlreadyExists`, `Conflict` |
-| `413` | `EntityTooLarge`, `DocumentTooLargeException` |
-| `415` | `UnsupportedDocumentException` (unsupported file type) |
-| `422` | `BadDocumentException` (corrupt/unreadable document) |
-| `429` | `Throttling`, `SlowDown`, rate limits |
-| `500` | Unexpected runtime errors / unmapped AWS codes |
-| `503` | `ServiceUnavailable` |
-
-The mapping lives in `src/utils/errors.py` and every failure is logged with structured context (`error_code`, `error_message`, `http_status`).
-
-## IAM Permissions (Least-Privilege)
-
-The Lambda execution role includes only the necessary permissions:
-
-| Service | Actions | Resource | Notes |
-|---------|---------|----------|-------|
-| **S3** | `s3:PutObject`, `s3:GetObject` | Bucket ARN (`arn:...:s3:::bucket/*`) | Only write/read to the document bucket. `S3CrudPolicy` was replaced with explicit actions to avoid granting `DeleteObject`, `PutObjectAcl`, etc. |
-| **Textract** | `textract:DetectDocumentText` | `*` | Textract does not support resource-level permissions, so `*` is required. Only `DetectDocumentText` is granted (not `AnalyzeDocument`). |
-| **KMS** | `kms:Decrypt` | Bucket's KMS key ARN | Only `Decrypt` is needed — the Lambda reads KMS-encrypted objects from S3. `Encrypt` and `GenerateDataKey` were removed as the Lambda does not write KMS-encrypted data directly. |
-| **CloudWatch** | `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` | Log group ARN | Managed by SAM's `AWS::Serverless::Function` (AWSLambdaBasicExecutionRole). |
-
-## S3 Bucket Protection
-
-When the bucket is created by the template (`CreateBucket=true`), the following protections are enabled:
-
-| Protection | Purpose |
-|------------|---------|
-| **KMS encryption** | Server-side encryption with `aws:kms` on all objects |
-| **Public access block** | Blocks all public ACLs and bucket policies |
-| **Versioning** | Preserves all object versions — protects against accidental overwrites when the same filename is re-uploaded |
-| **Lifecycle rule** | Transitions noncurrent versions to Glacier after 90 days and expires them after 365 days (controls cost while retaining recent history) |
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `LogLevel` | Logging level for the Lambda function | `INFO` |
+| `MaxFileSizeBytes` | Maximum upload file size in bytes | `10485760` (10 MB) |
+| `CorsAllowedOrigin` | CORS allowed origin for API Gateway | `*` |
 
 ## API Endpoints
 
@@ -267,10 +143,35 @@ All configuration is injected by SAM via the template (`Environment.Variables`) 
 
 | Variable | Description | Source |
 |----------|-------------|--------|
-| `BUCKET_NAME` | S3 bucket for document storage | Set by SAM from the `DocumentBucketName` parameter (**required** — no fallback) |
 | `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | Set by SAM from the `LogLevel` parameter |
 | `MAX_FILE_SIZE_BYTES` | Maximum upload file size in bytes | Set by SAM from the `MaxFileSizeBytes` parameter (default: 10 MB) |
 | `CORS_ALLOWED_ORIGIN` | CORS allowed origin for API responses | Set by SAM from the `CorsAllowedOrigin` parameter (default: `*`) |
+
+## Error Handling
+
+The handler returns meaningful HTTP status codes for different failure categories:
+
+| Status | Scenario |
+|--------|----------|
+| `400` | Missing/invalid request body, invalid base64, `InvalidParameter`, `InvalidS3ObjectException` |
+| `403` | `AccessDenied` / authorization failures |
+| `413` | `EntityTooLarge`, `DocumentTooLargeException` |
+| `415` | `UnsupportedDocumentException` (unsupported file type) |
+| `422` | `BadDocumentException` (corrupt/unreadable document) |
+| `429` | `Throttling`, `SlowDown`, rate limits |
+| `500` | Unexpected runtime errors / unmapped AWS codes |
+| `503` | `ServiceUnavailable` |
+
+The mapping lives in `src/utils/errors.py` and every failure is logged with structured context (`error_code`, `error_message`, `http_status`).
+
+## IAM Permissions (Least-Privilege)
+
+The Lambda execution role includes only the necessary permissions:
+
+| Service | Actions | Resource | Notes |
+|---------|---------|----------|-------|
+| **Textract** | `textract:DetectDocumentText` | `*` | Textract does not support resource-level permissions, so `*` is required. Only `DetectDocumentText` is granted (not `AnalyzeDocument`). |
+| **CloudWatch Logs** | `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` | Log group ARN | Managed by SAM's `AWS::Serverless::Function` (AWSLambdaBasicExecutionRole). |
 
 ## License
 

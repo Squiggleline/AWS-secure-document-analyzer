@@ -15,19 +15,8 @@ SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src"))
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-# Provide deterministic environment variables for tests. The Lambda code
-# requires BUCKET_NAME (no hardcoded fallback); SAM sets it in production.
-os.environ.setdefault("BUCKET_NAME", "test-bucket")
+# Provide deterministic environment variables for tests.
 os.environ.setdefault("CORS_ALLOWED_ORIGIN", "*")
-
-
-@pytest.fixture
-def mock_s3_client():
-    """Patch the S3 client used by services.document_storage."""
-    from unittest.mock import patch
-
-    with patch("services.document_storage.s3_client") as mock:
-        yield mock
 
 
 @pytest.fixture
