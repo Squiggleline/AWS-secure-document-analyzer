@@ -33,7 +33,7 @@ Parameters:
   
   DocumentBucketName:
     Type: String
-    Default: 'ai-security-uploads-2026'
+    Default: 'secure-document-analyzer-bucket'
     Description: 'Name of the S3 bucket for document storage'
   
   # Note: A KMS key and alias are created automatically by this template
