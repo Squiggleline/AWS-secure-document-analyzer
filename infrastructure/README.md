@@ -6,7 +6,7 @@ Reference files for the Secure Document Analyzer infrastructure.
 
 | File | Purpose |
 |------|---------|
-| `iam_policy.json` | IAM permissions reference (Textract only) |
+| `iam_policy.json` | IAM permissions reference (S3, Textract, KMS) |
 
 ## Note
 

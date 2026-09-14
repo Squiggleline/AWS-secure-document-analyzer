@@ -2,13 +2,14 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: |
   # Secure Document Analyzer - AWS SAM Template
-  #
+  # 
   # This template provisions:
-  # - Lambda function for document processing (with Textract)
+  # - Lambda function for document processing
   # - API Gateway for REST endpoints
   # - IAM roles with least-privilege permissions
+  # - S3 bucket with KMS encryption (KMS key managed by this template)
   #
-  # Architecture: User Upload -> API Gateway -> Lambda -> Textract -> Return text
+  # Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return text
 
 Globals:
   Function:
@@ -18,8 +19,27 @@ Globals:
 
 Parameters:
   # ============================================================================
-  # Lambda Configuration
+  # S3 Bucket Configuration
   # ============================================================================
+  # Option 1: Use an existing bucket (set CreateBucket=false)
+  # Option 2: Create a new bucket with KMS encryption (set CreateBucket=true)
+  CreateBucket:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Whether to create a new S3 bucket or use an existing one'
+  
+  DocumentBucketName:
+    Type: String
+    Default: 'secure-document-analyzer-bucket'
+    Description: 'Name of an existing S3 bucket (only used when CreateBucket=false)' 
+  
+  # Note: A KMS key and alias are created automatically by this template
+  # (see the DocumentKMSKey and DocumentKMSAlias resources below).
+  # The KmsKeyArn parameter is no longer needed.
+  
   LogLevel:
     Type: String
     Default: 'INFO'
@@ -40,36 +60,144 @@ Parameters:
     Default: '*'
     Description: 'CORS allowed origin for API Gateway (use * for all origins, or specify a domain like https://example.com)'
 
+Conditions:
+  # Condition to check if we should create a new bucket
+  ShouldCreateBucket: !Equals [!Ref CreateBucket, 'true']
+
 Resources:
+  # ============================================================================
+  # KMS Key and Alias (for S3 bucket encryption)
+  # ============================================================================
+  # A dedicated KMS key and alias are created to encrypt objects stored in
+  # the document bucket. The key has:
+  #   - Auto-rotation enabled (security best practice)
+  #   - A key policy granting S3 and Lambda permission to use the key,
+  #     scoped to only this project's bucket and Lambda function.
+  # - The root account retains full administrative access to the key.
+
+  DocumentKMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting Secure Document Analyzer document bucket
+      EnableKeyRotation: true
+      KeyPolicy:
+        # Allow the account root user to manage the key
+        - Sid: Allow administration of the key
+          Effect: Allow
+          Principal:
+            AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+          Action: 'kms:*'
+          Resource: '*'
+        # Allow S3 to encrypt/decrypt objects in the document bucket
+        - Sid: Allow S3 to use the key for bucket encryption
+          Effect: Allow
+          Principal:
+            Service: s3.amazonaws.com
+          Action:
+            - 'kms:GenerateDataKey'
+            - 'kms:Decrypt'
+          Resource: '*'
+          # Restrict to only this project's S3 bucket
+          Condition:
+            ArnEquals:
+              'aws:PrincipalArn': !If [ShouldCreateBucket, !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucket}', !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}']
+        # Allow Lambda to decrypt objects when processing documents
+        - Sid: Allow Lambda to decrypt objects
+          Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+            - 'kms:Decrypt'
+          Resource: '*'
+          # Restrict to only this project's Lambda function
+          Condition:
+            ArnEquals:
+              'aws:PrincipalArn': !GetAtt DocumentAnalyzerFunction.Arn
+
+  DocumentKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: 'alias/secure-document-analyzer'
+      TargetKeyId: !Ref DocumentKMSKey
+
+  # ============================================================================
+  # S3 Bucket (Optional - for new deployments)
+  # ============================================================================
+  # Creates a new S3 bucket with KMS encryption if CreateBucket=true
+  # If using an existing bucket, this resource is skipped
+  DocumentBucket:
+    Type: AWS::S3::Bucket
+    Condition: ShouldCreateBucket
+    Properties:
+      # Enable server-side encryption with the template-managed KMS key
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !Ref DocumentKMSKey
+      # Block public access for security
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      # Enable versioning to protect against accidental overwrites/deletes.
+      # The Lambda handler uses the client-supplied filename as the S3 key,
+      # so re-uploading the same filename would silently overwrite the
+      # previous object. Versioning preserves all versions for audit and
+      # recovery.
+      VersioningConfiguration:
+        Status: Enabled
+      # Lifecycle rule: transition noncurrent (older) versions to
+      # Glacier after 90 days and expire them after 365 days to
+      # control storage costs while retaining recent history.
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireNoncurrentVersions
+            Status: Enabled
+            NoncurrentVersionTransitions:
+              - NoncurrentDays: 90
+                StorageClass: GLACIER
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 365
+
   # ============================================================================
   # Lambda Function - Document Processing
   # ============================================================================
   # This function handles:
-  # 1. Receiving file uploads from API Gateway (base64-encoded body)
-  # 2. Validating the upload (file type, size, filename)
-  # 3. Extracting text directly from the uploaded bytes using Amazon Textract
-  # 4. Returning the extracted text to the client
-  #
-  # Documents are processed in-memory — no S3 bucket or KMS key is required.
-  # This simplifies the infrastructure and reduces the attack surface.
+  # 1. Receiving file uploads from API Gateway
+  # 2. Storing documents in S3
+  # 3. Extracting text using Amazon Textract
+  # 4. Returning extracted text to the client
   DocumentAnalyzerFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
       FunctionName: 'secure-document-analyzer'
-
+      
       # Environment variables for configuration
       # All configuration is externalized for flexibility
       Environment:
         Variables:
+          BUCKET_NAME: !If [ShouldCreateBucket, !Ref DocumentBucket, !Ref DocumentBucketName]
           LOG_LEVEL: !Ref LogLevel
           MAX_FILE_SIZE_BYTES: !Ref MaxFileSizeBytes
           CORS_ALLOWED_ORIGIN: !Ref CorsAllowedOrigin
-
+      
       # Least-privilege IAM policies
       # Each policy grants only the minimum required permissions
       Policies:
+        # S3 Access - Only PutObject and GetObject on the specific document bucket.
+        # S3CrudPolicy grants DeleteObject, PutObjectAcl, and other unnecessary
+        # permissions, so we use an explicit statement instead.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 's3:PutObject'
+                - 's3:GetObject'
+              Resource: !If [ShouldCreateBucket, !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucket}/*', !Sub 'arn:${AWS::Partition}:s3:::${DocumentBucketName}/*']
+
         # Textract - Only detect document text (not full analyze).
         # Textract does not support resource-level permissions, so '*' is
         # required here. This is the minimum Textract action needed.
@@ -79,6 +207,16 @@ Resources:
                 - 'textract:DetectDocumentText'
               Resource: '*'
 
+        # KMS - Only Decrypt on the bucket's KMS key.
+        # The Lambda reads objects from S3 (which are KMS-encrypted), so it
+        # needs kms:Decrypt. Encrypt and GenerateDataKey are not needed
+        # because the Lambda does not write KMS-encrypted data directly.
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 'kms:Decrypt'
+              Resource: !Ref DocumentKMSKey
+      
       # API Gateway event trigger
       # Creates a POST endpoint at /document
       Events:
@@ -99,7 +237,7 @@ Resources:
     Properties:
       Name: 'SecureDocumentAnalyzerAPI'
       StageName: prod
-
+      
       # CORS configuration for web clients
       # AllowOrigin is configurable via the CorsAllowedOrigin parameter.
       # AllowHeaders includes 'filename' (used by the upload endpoint) and
@@ -118,7 +256,14 @@ Outputs:
   ApiUrl:
     Description: 'URL of the API Gateway endpoint for document uploads'
     Value: !Sub 'https://${DocumentApi}.execute-api.${AWS::Region}.amazonaws.com/prod/document'
-
+  
   LambdaArn:
     Description: 'ARN of the Lambda function'
     Value: !GetAtt DocumentAnalyzerFunction.Arn
+  
+  DocumentBucket:
+    Description: 'S3 bucket for document storage'
+    Value: !If [ShouldCreateBucket, !Ref DocumentBucket, !Ref DocumentBucketName]
+  KmsKeyArn:
+    Description: 'ARN of the KMS key used for bucket encryption'
+    Value: !GetAtt DocumentKMSKey.Arn

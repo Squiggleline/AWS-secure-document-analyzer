@@ -34,10 +34,10 @@ _ALLOWED_EXTENSIONS = frozenset({"pdf", "png", "jpg", "jpeg", "tiff"})
 # Filename validation rules
 # ---------------------------------------------------------------------------
 # Reject path separators, null bytes, and other characters that are unsafe
-# in filenames or could enable path traversal.
+# as S3 object keys or could enable path traversal.
 _UNSAFE_FILENAME_PATTERN = re.compile(r"[\\/\x00-\x1f]")
 
-# Object keys can be up to 1024 bytes; we enforce a conservative limit.
+# S3 object keys can be up to 1024 bytes; we enforce a conservative limit.
 _MAX_FILENAME_LENGTH = 255
 
 
@@ -154,7 +154,7 @@ def parse_upload_event(event: dict) -> UploadRequest:
         logger.warning("Request body is empty")
         raise InvalidRequestError("Empty file content")
 
-    # Validate file size before any Textract calls
+    # Validate file size before any S3/Textract calls
     _validate_file_size(content)
 
     # Extract and validate the filename

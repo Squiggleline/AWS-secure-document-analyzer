@@ -1,19 +1,19 @@
-# Deployment Guide
+# Secure Document Analyzer - Deployment Guide
 
 ## Prerequisites
+1. AWS CLI installed and configured (`aws configure`)
+2. AWS SAM CLI installed
 
-1. **AWS CLI** installed and configured:
-   ```bash
-   aws --version
-   aws configure
-   ```
+## Installing SAM CLI
 
-2. **AWS SAM CLI** installed:
-   ```bash
-   sam --version
-   ```
+### Windows:
+Download the installer from: https://github.com/aws/aws-sam-cli/releases/latest
+Or use pip: `pip install aws-sam-cli`
 
-3. **Python 3.12+** installed locally
+### Verify installation:
+```bash
+sam --version
+```
 
 ## Deploying with SAM
 
@@ -43,7 +43,6 @@ This will ask you:
 - Save arguments to samconfig.toml: Y
 
 ### Step 3: Test the API
-
 After deployment, you'll get an API URL. Test with curl:
 ```bash
 curl -X POST https://<api-id>.execute-api.<region>.amazonaws.com/prod/document \
@@ -81,11 +80,11 @@ src/
   - app.py                      (Lambda handler / orchestration)
   - requirements.txt            (Python dependencies)
   - services/
-    - text_extraction.py        (Textract text extraction)
+    - document_storage.py       (S3 storage service)
+    - text_extraction.py        (Textract text extraction service)
   - utils/
     - logger.py                 (Structured logging)
     - validators.py             (Event validation)
-    - errors.py                 (AWS error -> HTTP mapping)
 tests/
   - conftest.py                 (Shared fixtures)
   - unit/                       (Unit tests for src/)
@@ -96,4 +95,3 @@ infrastructure/
 docs/
   - architecture.md             (Architecture documentation)
   - deployment.md               (This guide)
-```

@@ -3,8 +3,8 @@ AWS Error-to-HTTP Status Mapping
 ================================
 
 Maps AWS service error codes to meaningful HTTP status codes so the API
-Gateway response layer can return appropriate status codes for Textract
-failures. Unmapped codes default to 500 (Internal Server Error).
+Gateway response layer can return appropriate status codes for S3 and
+Textract failures. Unmapped codes default to 500 (Internal Server Error).
 """
 
 # AWS error code -> HTTP status code
@@ -22,6 +22,7 @@ _AWS_ERROR_STATUS_MAP = {
     "InvalidParameterException": 400,
     "InvalidRequest": 400,
     "InvalidS3ObjectException": 400,
+    "InvalidBucketName": 400,
     "InvalidArgumentException": 400,
     "MalformedPolicy": 400,
     # ------------------------------------------------------------------
@@ -41,12 +42,16 @@ _AWS_ERROR_STATUS_MAP = {
     # ------------------------------------------------------------------
     # Not found (404)
     # ------------------------------------------------------------------
+    "NoSuchBucket": 404,
+    "NoSuchKey": 404,
     "NotFoundException": 404,
     "ResourceNotFoundException": 404,
     "KMSNotFoundException": 404,
     # ------------------------------------------------------------------
     # Conflict / already exists (409)
     # ------------------------------------------------------------------
+    "BucketAlreadyExists": 409,
+    "BucketAlreadyOwnedByYou": 409,
     "Conflict": 409,
     "FileAlreadyExists": 409,
     # ------------------------------------------------------------------

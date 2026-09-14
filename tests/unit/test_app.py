@@ -15,8 +15,9 @@ class TestLambdaHandler:
     """Test cases for the Lambda handler."""
 
     @patch("app.extract_lines")
+    @patch("app.store_document")
     def test_success_with_custom_filename(
-        self, mock_extract, api_gateway_event
+        self, mock_store, mock_extract, api_gateway_event
     ):
         """Test successful processing with a filename header."""
         mock_extract.return_value = [
@@ -37,10 +38,17 @@ class TestLambdaHandler:
             {"text": "Hello World", "confidence": 99.5},
             {"text": "This is a test", "confidence": 98.2},
         ]
-        mock_extract.assert_called_once_with(b"Hello World")
+        mock_store.assert_called_once_with(
+            app.BUCKET_NAME,
+            "report.pdf",
+            b"Hello World",
+            original_filename="report.pdf",
+        )
+        mock_extract.assert_called_once_with(app.BUCKET_NAME, "report.pdf")
 
     @patch("app.extract_lines")
-    def test_success_with_default_filename(self, mock_extract, api_gateway_event):
+    @patch("app.store_document")
+    def test_success_with_default_filename(self, mock_store, mock_extract, api_gateway_event):
         """Test successful processing without a filename header."""
         mock_extract.return_value = [{"text": "Content", "confidence": 95.0}]
         event = api_gateway_event(filename=None)
@@ -54,10 +62,17 @@ class TestLambdaHandler:
         assert "processingTime" in body
         assert body["text"] == "Content"
         assert body["lines"] == [{"text": "Content", "confidence": 95.0}]
+        mock_store.assert_called_once_with(
+            app.BUCKET_NAME,
+            "uploaded_document.pdf",
+            b"Hello World",
+            original_filename="uploaded_document.pdf",
+        )
 
     @patch("app.extract_lines")
+    @patch("app.store_document")
     def test_full_event_structure_processed(
-        self, mock_extract, api_gateway_event
+        self, mock_store, mock_extract, api_gateway_event
     ):
         """Test that a fully populated API Gateway event is handled."""
         mock_extract.return_value = [{"text": "scanned text", "confidence": 97.0}]
@@ -76,7 +91,13 @@ class TestLambdaHandler:
         assert body["filename"] == "scan.pdf"
         assert body["status"] == "success"
         assert body["text"] == "scanned text"
-        mock_extract.assert_called_once_with(b"Sample document content")
+        mock_store.assert_called_once_with(
+            app.BUCKET_NAME,
+            "scan.pdf",
+            b"Sample document content",
+            original_filename="scan.pdf",
+        )
+        mock_extract.assert_called_once_with(app.BUCKET_NAME, "scan.pdf")
 
     def test_missing_body_returns_400(self, api_gateway_event):
         """Test that a request with no body returns 400."""
@@ -99,25 +120,26 @@ class TestLambdaHandler:
 
         assert result["statusCode"] == 400
 
-    @patch("app.extract_lines")
+    @patch("app.store_document")
     @pytest.mark.parametrize(
         "error_code,expected_status",
         [
             ("AccessDenied", 403),
             ("InvalidParameter", 400),
             ("EntityTooLarge", 413),
+            ("NoSuchBucket", 404),
             ("Throttling", 429),
             ("ServiceUnavailable", 503),
             ("SomeUnknownCode", 500),
         ],
     )
     def test_client_error_maps_to_http_status(
-        self, mock_extract, api_gateway_event, error_code, expected_status
+        self, mock_store, api_gateway_event, error_code, expected_status
     ):
         """Test that AWS service errors map to meaningful HTTP status codes."""
-        mock_extract.side_effect = ClientError(
+        mock_store.side_effect = ClientError(
             {"Error": {"Code": error_code, "Message": "Message"}},
-            "DetectDocumentText",
+            "PutObject",
         )
 
         result = app.lambda_handler(api_gateway_event(), context=None)
@@ -129,12 +151,12 @@ class TestLambdaHandler:
         assert "processingTime" in body
         assert body["filename"] is None
 
-    @patch("app.extract_lines")
-    def test_client_error_returns_message(self, mock_extract, api_gateway_event):
+    @patch("app.store_document")
+    def test_client_error_returns_message(self, mock_store, api_gateway_event):
         """Test that AWS service errors include the service message."""
-        mock_extract.side_effect = ClientError(
+        mock_store.side_effect = ClientError(
             {"Error": {"Code": "Throttling", "Message": "Rate exceeded"}},
-            "DetectDocumentText",
+            "PutObject",
         )
 
         result = app.lambda_handler(api_gateway_event(), context=None)
@@ -144,8 +166,9 @@ class TestLambdaHandler:
         assert body["message"] == "Rate exceeded"
 
     @patch("app.extract_lines")
+    @patch("app.store_document")
     def test_textract_bad_document_maps_to_422(
-        self, mock_extract, api_gateway_event
+        self, mock_store, mock_extract, api_gateway_event
     ):
         """Test that a Textract BadDocumentException returns 422."""
         mock_extract.side_effect = ClientError(
@@ -161,8 +184,9 @@ class TestLambdaHandler:
         assert body["status"] == "error"
 
     @patch("app.extract_lines")
+    @patch("app.store_document")
     def test_textract_unsupported_document_maps_to_415(
-        self, mock_extract, api_gateway_event
+        self, mock_store, mock_extract, api_gateway_event
     ):
         """Test that a Textract UnsupportedDocumentException returns 415."""
         mock_extract.side_effect = ClientError(
@@ -178,8 +202,9 @@ class TestLambdaHandler:
         assert body["status"] == "error"
 
     @patch("app.extract_lines")
+    @patch("app.store_document")
     def test_unexpected_error_returns_500(
-        self, mock_extract, api_gateway_event
+        self, mock_store, mock_extract, api_gateway_event
     ):
         """Test that unexpected exceptions return 500."""
         mock_extract.side_effect = RuntimeError("boom")
@@ -207,4 +232,10 @@ class TestLambdaHandler:
         """Test that request context fields are present in the event."""
         event = api_gateway_event(request_id="trace-123")
         assert event["requestContext"]["requestId"] == "trace-123"
-        assert event["requestContext"]
+        assert event["requestContext"]["stage"] == "prod"
+        assert event["requestContext"]["httpMethod"] == "POST"
+        assert event["isBase64Encoded"] is True
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

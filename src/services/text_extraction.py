@@ -4,8 +4,8 @@ Text Extraction Service
 
 Handles text extraction from documents using Amazon Textract.
 
-Documents are passed as raw bytes (from the API Gateway request body)
-and processed directly by Textract — no S3 bucket is required.
+Service layer used by the Lambda handler to extract text from documents
+stored in S3.
 """
 
 import logging
@@ -21,18 +21,20 @@ except Exception:  # pragma: no cover - permits import without AWS configuration
 
 
 def extract_text(
-    content: bytes,
+    bucket_name: str,
+    document_name: str,
     feature_types: list[str] | None = None,
 ) -> dict:
     """
-    Extract text from a document using Amazon Textract.
+    Extract text from a document stored in S3.
 
     If ``feature_types`` is provided, uses ``analyze_document`` (which can
     detect TABLES and FORMS). Otherwise uses ``detect_document_text`` for
     simpler LINE/WORD extraction.
 
     Parameters:
-        content (bytes): The raw document bytes (PDF, PNG, JPG, TIFF).
+        bucket_name (str): Name of the S3 bucket containing the document.
+        document_name (str): Object key (filename) in the bucket.
         feature_types (list[str], optional): Textract features. Valid values:
             TABLES, FORMS, QUERIES, SIGNATURES, LAYOUT.
 
@@ -45,20 +47,21 @@ def extract_text(
     if textract_client is None:  # pragma: no cover
         raise RuntimeError("Textract client not initialized")
 
+    document = {"S3Object": {"Bucket": bucket_name, "Name": document_name}}
+
     if feature_types:
         response = textract_client.analyze_document(
-            Document={"Bytes": content},
+            Document=document,
             FeatureTypes=feature_types,
         )
     else:
-        response = textract_client.detect_document_text(
-            Document={"Bytes": content}
-        )
+        response = textract_client.detect_document_text(Document=document)
 
     logger.info(
         "Text extraction complete",
         extra={
-            "content_size_bytes": len(content),
+            "bucket": bucket_name,
+            "key": document_name,
             "block_count": len(response.get("Blocks", [])),
         },
     )
@@ -93,12 +96,13 @@ def parse_text_blocks(response: dict) -> list[dict]:
     return lines
 
 
-def extract_lines(content: bytes) -> list[dict]:
+def extract_lines(bucket_name: str, document_name: str) -> list[dict]:
     """
     Extract LINE blocks with text and confidence from a document.
 
     Parameters:
-        content (bytes): The raw document bytes (PDF, PNG, JPG, TIFF).
+        bucket_name (str): Name of the S3 bucket containing the document.
+        document_name (str): Object key (filename) in the bucket.
 
     Returns:
         list[dict]: A list of dicts, each with ``text`` and ``confidence``
@@ -107,5 +111,5 @@ def extract_lines(content: bytes) -> list[dict]:
     Raises:
         ClientError: If Textract rejects the request.
     """
-    response = extract_text(content)
+    response = extract_text(bucket_name, document_name)
     return parse_text_blocks(response)

@@ -5,10 +5,11 @@ Secure Document Analyzer - Lambda Handler
 Thin Lambda handler that orchestrates the document analysis workflow:
 
 1. Parse the API Gateway upload event.
-2. Extract text directly from the uploaded document bytes using Amazon Textract.
-3. Return the extracted text to the client.
+2. Store the document in S3.
+3. Extract text with Amazon Textract.
+4. Return the extracted text to the client.
 
-Architecture: User Upload -> API Gateway -> Lambda -> Textract -> Response
+Architecture: User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Response
 """
 
 import json
@@ -17,12 +18,15 @@ import time
 
 from botocore.exceptions import ClientError
 
+from services.document_storage import store_document
 from services.text_extraction import extract_lines
 from utils.errors import http_status_for_aws_error
 from utils.logger import get_logger
 from utils.validators import InvalidRequestError, parse_upload_event
 
 logger = get_logger()
+
+BUCKET_NAME = os.environ["BUCKET_NAME"]
 
 CORS_ALLOWED_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "*")
 
@@ -108,9 +112,16 @@ def lambda_handler(event: dict, context=None) -> dict:
             },
         )
 
-        # Extract text directly from the uploaded bytes using Amazon Textract.
-        # No S3 bucket or KMS key is needed — documents are processed in-memory.
-        extracted_lines = extract_lines(request.content)
+        # Persist the document to S3 (with metadata: timestamp, content type, filename)
+        store_document(
+            BUCKET_NAME,
+            request.filename,
+            request.content,
+            original_filename=request.filename,
+        )
+
+        # Extract text using Textract (returns lines with confidence scores)
+        extracted_lines = extract_lines(BUCKET_NAME, request.filename)
         extracted_text = "\n".join(line["text"] for line in extracted_lines)
 
         processing_time = time.perf_counter() - start_time
@@ -161,7 +172,7 @@ if __name__ == "__main__":
     logger.info(
         "This module is deployed as an AWS Lambda function and "
         "triggered by API Gateway when a document is uploaded.",
-        extra={"architecture": "User Upload -> API Gateway -> Lambda -> Textract -> Response"},
+        extra={"architecture": "User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Response"},
     )
     logger.info(
         "For local invocation, use the AWS SAM CLI",

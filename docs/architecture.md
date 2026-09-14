@@ -2,7 +2,7 @@
 
 ## Current Architecture:
 ```
-User Upload -> API Gateway -> Lambda -> Textract -> Return extracted text
+User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return extracted text
 ```
 
 ## Components:
@@ -10,36 +10,40 @@ User Upload -> API Gateway -> Lambda -> Textract -> Return extracted text
 ### 1. API Gateway
 - REST API endpoint for document upload (`POST /document`)
 - CORS enabled for web clients
-- Passes the base64-encoded file body to the Lambda function
+- Triggers the Lambda function
 
 ### 2. Lambda Function (`src/app.py`)
 - Receives file from API Gateway
 - Validates and parses the upload event (`src/utils/validators.py`)
-- Extracts text directly from the uploaded document bytes using Amazon Textract
+- Uploads document to S3 (`src/services/document_storage.py`)
+- Calls Textract for text extraction (`src/services/text_extraction.py`)
 - Returns extracted text to the user
 
-### 3. Textract
+### 3. S3 Bucket
+- Secure storage for uploaded documents
+- KMS encryption enabled
+- Public access blocked
+
+### 4. Textract
 - Extracts text from documents
 - Supports PDF, PNG, JPG, TIFF
-- Documents are passed as raw bytes (no S3 required)
 
 ## Infrastructure (AWS SAM - `template.yaml`)
-- `AWS::Serverless::Function` - Lambda with python3.12 runtime, Textract permissions
+- `AWS::Serverless::Function` - Lambda with python3.12 runtime
 - `AWS::Serverless::Api` - API Gateway REST API
-- Least-privilege IAM policy (Textract only)
+- Least-privilege IAM policies (S3, Textract, KMS)
+- Optional S3 bucket creation with KMS encryption
 
 ## Code Organization
 ```
 src/
 ├── app.py                  # Thin Lambda handler (orchestration)
-├── requirements.txt        # Runtime dependencies
 ├── services/
+│   ├── document_storage.py # S3 storage operations
 │   └── text_extraction.py  # Textract text extraction
 └── utils/
-    ├── __init__.py
-    ├── errors.py            # AWS error -> HTTP status mapping
-    ├── logger.py            # Structured logging
-    └── validators.py        # Event validation & parsing
+    ├── logger.py           # Structured logging
+    └── validators.py       # Event validation & parsing
 ```
 
 ## Testing
