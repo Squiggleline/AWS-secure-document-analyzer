@@ -32,7 +32,7 @@ User Upload -> API Gateway -> Lambda -> S3 -> Textract -> Return extracted text
 - `AWS::Serverless::Function` - Lambda with python3.12 runtime
 - `AWS::Serverless::Api` - API Gateway REST API
 - Least-privilege IAM policies (S3, Textract, KMS)
-- Optional S3 bucket creation with KMS encryption
+- Template-managed S3 bucket with KMS encryption (always created — no pre-existing bucket option)
 
 ## Code Organization
 ```

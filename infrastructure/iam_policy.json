@@ -12,13 +12,15 @@
             "Effect": "Allow",
             "Action": [
                 "s3:PutObject",
+                "s3:GenerateObject",
                 "s3:GetObject"
             ],
-            "Resource": "arn:aws:s3:::ai-security-uploads-2026/*"
+            "Resource": "arn:aws:s3:::<DocumentBucket>/*"
         },
         {
             "Effect": "Allow",
             "Action": [
+                "kms:GenerateDataKey",
                 "kms:Decrypt"
             ],
             "Resource": "<KmsKeyArn>"

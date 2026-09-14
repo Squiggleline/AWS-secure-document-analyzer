@@ -98,9 +98,6 @@ The first deployment will prompt for parameters. Subsequent deployments use `sam
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `CreateBucket` | Create new S3 bucket (true) or use existing (false) | `false` |
-| `DocumentBucketName` | S3 bucket name for document storage | `ai-security-uploads-2026` |
-| `KmsKeyId` | KMS key ID for encryption (optional) | (empty) |
 | `LogLevel` | Logging level for the Lambda function | `INFO` |
 | `MaxFileSizeBytes` | Maximum upload file size in bytes | `10485760` (10 MB) |
 | `CorsAllowedOrigin` | CORS allowed origin for API Gateway | `*` |
@@ -231,14 +228,14 @@ The Lambda execution role includes only the necessary permissions:
 
 | Service | Actions | Resource | Notes |
 |---------|---------|----------|-------|
-| **S3** | `s3:PutObject`, `s3:GetObject` | Bucket ARN (`arn:...:s3:::bucket/*`) | Only write/read to the document bucket. `S3CrudPolicy` was replaced with explicit actions to avoid granting `DeleteObject`, `PutObjectAcl`, etc. |
+| **S3** | `s3:PutObject`, `s3:GenerateObject`, `s3:GetObject` | Bucket ARN (`arn:...:s3:::bucket/*`) | Only write/read to the template-created document bucket. `S3CrudPolicy` was replaced with explicit actions to avoid granting `DeleteObject`, `PutObjectAcl`, etc. |
 | **Textract** | `textract:DetectDocumentText` | `*` | Textract does not support resource-level permissions, so `*` is required. Only `DetectDocumentText` is granted (not `AnalyzeDocument`). |
-| **KMS** | `kms:Decrypt` | Bucket's KMS key ARN | Only `Decrypt` is needed — the Lambda reads KMS-encrypted objects from S3. `Encrypt` and `GenerateDataKey` were removed as the Lambda does not write KMS-encrypted data directly. |
+| **KMS** | `kms:GenerateDataKey`, `kms:Decrypt` | Bucket's KMS key ARN | `Decrypt` for reading KMS-encrypted objects from S3; `GenerateDataKey` for encrypted uploads. Both are scoped to the template-created KMS key. |
 | **CloudWatch** | `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents` | Log group ARN | Managed by SAM's `AWS::Serverless::Function` (AWSLambdaBasicExecutionRole). |
 
 ## S3 Bucket Protection
 
-When the bucket is created by the template (`CreateBucket=true`), the following protections are enabled:
+The bucket is always created by the template (no pre-existing bucket option) with the following protections enabled:
 
 | Protection | Purpose |
 |------------|---------|
@@ -267,7 +264,7 @@ All configuration is injected by SAM via the template (`Environment.Variables`) 
 
 | Variable | Description | Source |
 |----------|-------------|--------|
-| `BUCKET_NAME` | S3 bucket for document storage | Set by SAM from the `DocumentBucketName` parameter (**required** — no fallback) |
+| `BUCKET_NAME` | S3 bucket for document storage | Set by SAM to the template-created `DocumentBucket` resource name (**required** — no fallback) |
 | `LOG_LEVEL` | Logging level (DEBUG/INFO/WARNING/ERROR) | Set by SAM from the `LogLevel` parameter |
 | `MAX_FILE_SIZE_BYTES` | Maximum upload file size in bytes | Set by SAM from the `MaxFileSizeBytes` parameter (default: 10 MB) |
 | `CORS_ALLOWED_ORIGIN` | CORS allowed origin for API responses | Set by SAM from the `CorsAllowedOrigin` parameter (default: `*`) |

@@ -19,9 +19,10 @@ region = "us-east-1"
 
 # Template parameters (matching template.yaml Parameters section)
 # These prevent interactive prompts during `sam deploy`.
-# DocumentBucketName is no longer passed - the bucket name is auto-generated
-# by CloudFormation when CreateBucket=true. KmsKeyArn is output by the stack.
-parameter_overrides = "CreateBucket=true LogLevel=INFO MaxFileSizeBytes=10485760 CorsAllowedOrigin=*"
+# The S3 bucket (name and KMS encryption) is created entirely by the
+# template - no bucket/KMS parameters exist. The bucket name and KMS key
+# ARN are exposed as stack outputs (DocumentBucket, KmsKeyArn).
+parameter_overrides = "LogLevel=INFO MaxFileSizeBytes=10485760 CorsAllowedOrigin=*"
 
 [default.sync]
 [default.sync.parameters]
